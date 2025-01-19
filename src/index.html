@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L3ns W3bsit3 X3</title>
+    <style>
+        @font-face {
+            font-family: 'numbbunny';
+            src: url('/fonts/numbbunny-font/Numbbunny-L7L5.otf') format('truetype');
+        }
+        @font-face {
+            font-family: 'StarFont';
+            src: url('/fonts/star-font/StarFont-MB9r.ttf') format('truetype');
+        }
+        body { 
+            background: url('images/bunny.PNG') no-repeat center center fixed; 
+            background-size: cover;
+            font-family: 'numbbunny', Arial, sans-serif; margin: 0; padding: 0; 
+            color: #c76c98;
+        }
+        header { background: #ffcee3; padding: 1em 0; text-align: center; }
+        nav { margin: 0; padding: 0; text-align: center; }
+        nav a { margin: 0 1em; text-decoration: none; color: #ff93c7; }
+        section { padding: 2em; }
+        footer { background: #ffcee3; text-align: center; padding: 1em 0; position: fixed; width: 100%; bottom: 0; }
+        h2 {
+            font-family: 'StarFont';
+        }
+        h1 {
+            font-family: 'StarFont';
+        }
+        .whitefont { color: white; }
+        .babypinkfont { color: #ff93c7; }
+        .gallery {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            margin-top: 20px;
+        }
+        .gallery img {
+            width: 100px;
+            height: 100px;
+            object-fit: cover;
+            margin: 5px;
+            cursor: pointer;
+        }
+        .main-image {
+            width: 500px;
+            height: 500px;
+            object-fit: cover;
+            display: block;
+            margin: 20px auto;
+        }
+    </style>
+    <script>
+    function doingfunnystuff(str) {
+        return str.replace(/e/g, '3').replace(/o/g, '0').replace(/a/g, '4');
+    }
+
+    document.addEventListener('DOMContentLoaded', function() {
+        //document.body.innerHTML = doingfunnystuff(document.body.innerHTML);
+    });
+function changeImage(src) {
+    // Change the image source
+    document.getElementById('mainImage').src = src.replace('100', '500');
+    
+    // Play the sound
+    const audio = document.getElementById('clickSound');
+    audio.play();
+}
+
+    </script>
+</head>
+<body>
+  <audio id="clickSound" src="sounds/click2.m4a"></audio>
+    <header>
+        <h1 class='babypinkfont'>Howdy sigma baby gronk rizz toliet!</h1>
+        <nav>
+            <a href="#">Home</a>
+            <a href="#">About</a>
+            <a href="#">Contact</a>
+        </nav>
+    </header>
+    <section>
+        <h2 class='babypinkfont'>About Us</h2>
+        <p class='babypinkfont'>This is a sample website created to demonstrate basic HTML structure.</p>
+        <div class="main-image-container">
+            <img id="mainImage" class="main-image" src="images/gallery1/1.PNG" alt="Main Image">
+        </div>
+        <div class="gallery">
+            <img src="images/gallery1/1.PNG" alt="Thumbnail 1" onclick="changeImage(this.src)">
+            <img src="images/gallery1/2.PNG" alt="Thumbnail 1" onclick="changeImage(this.src)">
+            <img src="images/gallery1/3.PNG" alt="Thumbnail 1" onclick="changeImage(this.src)">
+            <img src="images/gallery1/4.PNG" alt="Thumbnail 1" onclick="changeImage(this.src)">
+            <img src="images/gallery1/5.PNG" alt="Thumbnail 1" onclick="changeImage(this.src)">
+        </div>
+    </section>
+    <footer>
+        <p>&copy; 2024 My Website !! ^_^</p>
+    </footer>
+</body>
+</html>
