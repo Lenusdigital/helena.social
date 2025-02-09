@@ -1,0 +1,67 @@
+# Node.js dependencies
+node_modules/
+npm-debug.log
+yarn-error.log
+yarn.lock
+package-lock.json
+
+# IDE / Editor settings
+.vscode/
+.idea/
+*.sublime-workspace
+
+# Build output
+dist/
+build/
+out/
+*.log
+*.cache
+.DS_Store
+
+# Large media files (adjust extensions if needed)
+*.mp4
+*.mov
+*.avi
+*.mkv
+*.flac
+*.wav
+*.mp3
+*.ogg
+*.webm
+*.zip
+*.tar
+*.gz
+*.rar
+*.7z
+*.iso
+
+# Images (if not versioned)
+*.psd
+*.xcf
+*.ai
+*.eps
+*.tiff
+*.bmp
+*.raw
+
+# Generated WebGL shader binaries (if applicable)
+*.spv
+*.bin
+*.glsl.cache
+
+# Local environment files
+.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Temporary files
+*.tmp
+*.swp
+*.swo
+*.swn
+*.bak
+Thumbs.db
+
+
