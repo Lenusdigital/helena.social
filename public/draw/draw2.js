@@ -318,20 +318,22 @@ const paintFS = `
   varying vec2 v_texCoord;
   uniform sampler2D u_brush;
   uniform vec4 u_tint;
-  uniform bool u_erase; // New flag to toggle erasing mode
+  uniform bool u_erase; // Toggle eraser mode
 
   void main() {
     vec4 brushColor = texture2D(u_brush, v_texCoord);
-    
     if (u_erase) {
-      // Use the brush alpha as an eraser (removes color)
-      gl_FragColor = vec4(0.0, 0.0, 0.0, brushColor.a * -1.0);
+      // When erasing, output a color whose alpha equals the brush alpha.
+      // With gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA), this will
+      // reduce the underlying alpha (i.e. erase the stroke).
+      gl_FragColor = vec4(0.0, 0.0, 0.0, brushColor.a);
     } else {
-      // Normal painting
+      // Normal painting: tint the brush with u_tint.
       gl_FragColor = vec4(u_tint.rgb, brushColor.a);
     }
   }
 `;
+
 
 
 // Fragment shader for drawing the brush overlay (preview) tinted.
@@ -1246,8 +1248,21 @@ function drawSingleBrushStamp(fx, fy) {
   gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
   gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
   gl.enable(gl.BLEND);
-  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  
   gl.useProgram(paintProgram);
+
+  // >>> BEGIN: Eraser mode support
+  // Inside drawSingleBrushStamp(), before drawing:
+  const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
+  if (isErasing) {
+    gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(eraseUniform, 1);
+  } else {
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.uniform1i(eraseUniform, 0);
+  }
+
+  // <<< END: Eraser mode support
 
   const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
   gl.uniform1f(flipLoc, 1.0);
