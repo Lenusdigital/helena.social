@@ -1,3 +1,6 @@
+
+console.log("draw2.js - Helena Paint ")
+
 const canvas = document.getElementById("glCanvas");
 
 const gl = canvas.getContext("webgl2", { alpha: true });
@@ -22,7 +25,6 @@ const brushFiles = [
 
 
 ];
-
 
 
 let brushTextures = [];
@@ -90,7 +92,6 @@ const lightnessPalette = document.getElementById("lightnessPalette");
 
 let baseColor = [1, 0, 0]; // Default red
 let lightnessFactor = 0.5; // Default 50%
-
 
 
 function updateLightnessGradient() {
@@ -891,9 +892,37 @@ canvas.addEventListener("mousedown", (event) => {
 });
 
 
+// canvas.addEventListener("mousemove", (event) => {
+//   const pos = getMousePos(event);
+//   // If we already have a previous position, update the angle.
+//   if (lastX !== null && lastY !== null) {
+//     const dx = pos.x - lastX;
+//     const dy = pos.y - lastY;
+//     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//       currentAngle = Math.atan2(dy, dx);
+//     }
+//   }
+//   // Update lastX/lastY regardless of painting state.
+//   lastX = pos.x;
+//   lastY = pos.y;
+  
+//   // Update the brush overlay position.
+//   overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+  
+//   // If painting, draw the stroke.
+//   if (isDrawing) {
+//     drawBrushStrokeToPaintLayer(pos.x, pos.y);
+//   }
+// });
+
+// Near the global declarations of lastX and lastY, insert:
+// let lastX = null, lastY = null;
+let lastDrawTime = 0;
+
 canvas.addEventListener("mousemove", (event) => {
+  if (Date.now() - lastDrawTime < 16) return;
+  lastDrawTime = Date.now();
   const pos = getMousePos(event);
-  // If we already have a previous position, update the angle.
   if (lastX !== null && lastY !== null) {
     const dx = pos.x - lastX;
     const dy = pos.y - lastY;
@@ -901,19 +930,34 @@ canvas.addEventListener("mousemove", (event) => {
       currentAngle = Math.atan2(dy, dx);
     }
   }
-  // Update lastX/lastY regardless of painting state.
   lastX = pos.x;
   lastY = pos.y;
-  
-  // Update the brush overlay position.
   overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-  
-  // If painting, draw the stroke.
   if (isDrawing) {
     drawBrushStrokeToPaintLayer(pos.x, pos.y);
   }
 });
 
+// Replace the existing touchmove listener with:
+canvas.addEventListener("touchmove", (event) => {
+  event.preventDefault();
+  if (Date.now() - lastDrawTime < 16) return;
+  lastDrawTime = Date.now();
+  const pos = getMousePos(event.touches[0]);
+  if (lastX !== null && lastY !== null) {
+    const dx = pos.x - lastX;
+    const dy = pos.y - lastY;
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+      currentAngle = Math.atan2(dy, dx);
+    }
+  }
+  lastX = pos.x;
+  lastY = pos.y;
+  overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+  if (isDrawing) {
+    drawBrushStrokeToPaintLayer(pos.x, pos.y);
+  }
+});
 
 
 canvas.addEventListener("mouseup", () => { isDrawing = false; });
@@ -947,23 +991,23 @@ canvas.addEventListener("touchstart", (event) => {
   drawBrushStrokeToPaintLayer(pos.x, pos.y);
 });
 
-canvas.addEventListener("touchmove", (event) => {
-  event.preventDefault();
-  const pos = getMousePos(event.touches[0]);
-  if (lastX !== null && lastY !== null) {
-    const dx = pos.x - lastX;
-    const dy = pos.y - lastY;
-    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-      currentAngle = Math.atan2(dy, dx);
-    }
-  }
-  lastX = pos.x;
-  lastY = pos.y;
-  overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-  if (isDrawing) {
-    drawBrushStrokeToPaintLayer(pos.x, pos.y);
-  }
-});
+// canvas.addEventListener("touchmove", (event) => {
+//   event.preventDefault();
+//   const pos = getMousePos(event.touches[0]);
+//   if (lastX !== null && lastY !== null) {
+//     const dx = pos.x - lastX;
+//     const dy = pos.y - lastY;
+//     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//       currentAngle = Math.atan2(dy, dx);
+//     }
+//   }
+//   lastX = pos.x;
+//   lastY = pos.y;
+//   overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+//   if (isDrawing) {
+//     drawBrushStrokeToPaintLayer(pos.x, pos.y);
+//   }
+// });
 
 
 
@@ -1713,25 +1757,27 @@ function drawBrushOverlay() {
   gl.disableVertexAttribArray(texLocOverlay);
 }
 
+
+// Update drawScene by removing the internal requestAnimationFrame call:
 function drawScene() {
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, canvas.width, canvas.height);
   gl.clearColor(1, 1, 1, 1);
   gl.clear(gl.COLOR_BUFFER_BIT);
   
-  //–– Draw background image using quadProgram.
+  // Draw background image using quadProgram
   gl.useProgram(quadProgram);
   let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-  gl.uniform1f(flipLoc, -1.0); // apply vertical flip for screen drawing
+  gl.uniform1f(flipLoc, -1.0);
   let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
   gl.uniform2f(resLoc, canvas.width, canvas.height);
   const quadVertices = new Float32Array([
-    0, 0,              0, 0,
-    canvas.width, 0,   1, 0,
-    0, canvas.height,  0, 1,
-    0, canvas.height,  0, 1,
-    canvas.width, 0,   1, 0,
-    canvas.width, canvas.height,  1, 1
+    0, 0, 0, 0,
+    canvas.width, 0, 1, 0,
+    0, canvas.height, 0, 1,
+    0, canvas.height, 0, 1,
+    canvas.width, 0, 1, 0,
+    canvas.width, canvas.height, 1, 1
   ]);
   let buffer = gl.createBuffer();
   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
@@ -1749,7 +1795,7 @@ function drawScene() {
   gl.drawArrays(gl.TRIANGLES, 0, 6);
   gl.deleteBuffer(buffer);
   
-  //–– Draw the persistent paint layer (FBO texture) on top.
+  // Draw persistent paint layer
   gl.enable(gl.BLEND);
   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
   gl.useProgram(quadProgram);
@@ -1771,16 +1817,86 @@ function drawScene() {
   gl.deleteBuffer(buffer);
   gl.disable(gl.BLEND);
   
-  //–– Draw the brush overlay (preview) using overlayProgram.
+  // Draw brush overlay
   gl.useProgram(overlayProgram);
   flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
   gl.uniform1f(flipLoc, -1.0);
   resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
   gl.uniform2f(resLoc, canvas.width, canvas.height);
   drawBrushOverlay();
-  
-  requestAnimationFrame(drawScene);
 }
+
+
+
+
+// function drawScene() {
+//   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//   gl.viewport(0, 0, canvas.width, canvas.height);
+//   gl.clearColor(1, 1, 1, 1);
+//   gl.clear(gl.COLOR_BUFFER_BIT);
+  
+//   //–– Draw background image using quadProgram.
+//   gl.useProgram(quadProgram);
+//   let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+//   gl.uniform1f(flipLoc, -1.0); // apply vertical flip for screen drawing
+//   let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
+//   gl.uniform2f(resLoc, canvas.width, canvas.height);
+//   const quadVertices = new Float32Array([
+//     0, 0,              0, 0,
+//     canvas.width, 0,   1, 0,
+//     0, canvas.height,  0, 1,
+//     0, canvas.height,  0, 1,
+//     canvas.width, 0,   1, 0,
+//     canvas.width, canvas.height,  1, 1
+//   ]);
+//   let buffer = gl.createBuffer();
+//   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+//   gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
+//   let posLoc = gl.getAttribLocation(quadProgram, "a_position");
+//   gl.enableVertexAttribArray(posLoc);
+//   gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+//   let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+//   gl.enableVertexAttribArray(texLoc);
+//   gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+//   gl.activeTexture(gl.TEXTURE0);
+//   gl.bindTexture(gl.TEXTURE_2D, texture);
+//   const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
+//   gl.uniform1i(texUniform, 0);
+//   gl.drawArrays(gl.TRIANGLES, 0, 6);
+//   gl.deleteBuffer(buffer);
+  
+//   //–– Draw the persistent paint layer (FBO texture) on top.
+//   gl.enable(gl.BLEND);
+//   gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+//   gl.useProgram(quadProgram);
+//   flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+//   gl.uniform1f(flipLoc, -1.0);
+//   buffer = gl.createBuffer();
+//   gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+//   gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
+//   posLoc = gl.getAttribLocation(quadProgram, "a_position");
+//   gl.enableVertexAttribArray(posLoc);
+//   gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+//   texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+//   gl.enableVertexAttribArray(texLoc);
+//   gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+//   gl.activeTexture(gl.TEXTURE0);
+//   gl.bindTexture(gl.TEXTURE_2D, paintTexture);
+//   gl.uniform1i(texUniform, 0);
+//   gl.drawArrays(gl.TRIANGLES, 0, 6);
+//   gl.deleteBuffer(buffer);
+//   gl.disable(gl.BLEND);
+  
+//   //–– Draw the brush overlay (preview) using overlayProgram.
+//   gl.useProgram(overlayProgram);
+//   flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
+//   gl.uniform1f(flipLoc, -1.0);
+//   resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
+//   gl.uniform2f(resLoc, canvas.width, canvas.height);
+//   drawBrushOverlay();
+  
+//   requestAnimationFrame(drawScene);
+// }
 
 //–––––––––––––––––––
 // FILE LOADER (for background image)
