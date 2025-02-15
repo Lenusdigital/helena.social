@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WebGL Image Loader</title>
+<style>
+body {
+    margin: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    font-family: Avenir, Helvetica, Arial, sans-serif;
+}
+canvas {
+    border: 0px solid black;
+    max-width: 100vw;
+    max-height: 100vh;
+}
+#glCanvas {}
+#brushSizeSliderContainer {
+    position: fixed;
+    bottom: 10px;
+    left: 0;
+    width: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+input[type="range"] {
+    width: 100%;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #444, #888);
+    -webkit-appearance: none;
+    appearance: none;
+    outline: none;
+}
+
+/* Track Styling */
+input[type="range"]::-webkit-slider-runnable-track {
+    background: linear-gradient(to right, #222, #666);
+    height: 10px;
+    border-radius: 5px;
+}
+
+/* Square Thumb for Chrome & Safari */
+input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 30px;
+    height: 30px;
+    background: black;
+    border: 3px solid rgba(255,255,255,0.05);
+    border-radius: 0.5rem;
+    cursor: pointer;
+    margin-top: -10px;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+}
+/* Square Thumb for Firefox */
+input[type="range"]::-moz-range-thumb {
+    width: 30px;
+    height: 30px;
+    background: #fff;
+    border: 3px solid #007bff;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.4);
+}
+/* Square Thumb for Edge */
+input[type="range"]::-ms-thumb {
+    width: 30px;
+    height: 30px;
+    background: #fff;
+    border: 3px solid #007bff;
+    border-radius: 4px;
+    cursor: pointer;
+    box-shadow: 0 0 8px rgba(0, 123, 255, 0.4);
+}
+#colorPalette {
+  width: 36px;
+  height: 300px;
+  background: linear-gradient(to bottom, red, yellow, green, cyan, blue, magenta, red);
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+}
+#lightnessPalette {
+    position: relative;
+    width: 36px;
+    height: 300px;
+    background: linear-gradient(to bottom, black, white);
+    border-radius: 5px;
+    cursor: pointer;
+    display: inline-flex;
+}
+input[type="color" i] {
+    width: 72px;
+    height: 48px;
+    border: 4px solid #dbdbdb;
+    border-radius: 14px;
+    padding: 0rem;
+    cursor: pointer;
+    background: none;
+}
+/* Remove default webkit styling (for Chrome, Safari, Edge) */
+input[type="color" i]::-webkit-color-swatch-wrapper {
+    padding: 0;
+}
+input[type="color" i]::-webkit-color-swatch {
+    border: none;
+    border-radius: 8px;
+}
+/* Optional: Add a hover effect */
+input[type="color" i]:hover {
+    filter: brightness(1.1);
+}
+#colorPickerContainer {
+    position: relative;
+    display: flex;
+}
+#colorsContainer {
+    position: absolute;
+    right: 0;
+    top: 33%;
+}
+#eraserToggle {
+    position: relative;
+}
+#cleanButton {
+}
+.bs {
+    border: 1px solid rgba(0,0,0,0.022);
+    background: rgba(0,0,0,0.05);
+    padding: 0.65rem 0.35rem 0.65rem 0.35rem;
+    font-size: 0.8rem;
+    border-radius: 0.5rem;
+    width: auto;
+    transition: all 0.25s ease-in-out;
+    pointer-events: all;
+    user-select: none;
+    text-align: center;
+    margin: 0.25rem;
+    display: inline-flex;
+}
+.bs:hover {
+    background: rgba(0,0,0,0.25);
+}
+#redoUndoButtons {
+    position: absolute;
+    bottom: 0;
+    right: 0;
+    width: 100%;
+    display: flex;
+    flex-direction: row-reverse;
+    justify-content: flex-start;
+    z-index: 10;
+}
+#saveButton {
+}
+#saveCanvasButton {
+}
+#galleryButton {
+}
+#imageLoaderButton {
+}
+.brush-thumbnail {
+  width: 45px;
+  height: 45px;
+  margin: 2px;
+  border: 2px solid transparent;
+  cursor: pointer;
+}
+
+.modal { display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);
+    z-index: 400; 
+}
+
+.modal-content { padding: 20px; margin: 10% auto; width: 90%; text-align: center; 
+    border-radius: 0.2rem;
+    background: rgba(255, 255, 255, 0.9);
+    z-index: 1000;
+}
+.close { 
+    float: right; 
+    cursor: pointer;
+    font-size: 1.5rem;
+    color: red; 
+}
+.gallery-item { display: inline-block; margin: 5px; cursor: pointer; }
+.gallery-item img { width: 100px; height: 100px; object-fit: contain; }
+#saveGalleryButtons {
+    position: absolute;
+    top: 0;
+    right: 0;
+    max-width: 80px;
+}
+.status-message {
+    position: fixed;
+    bottom: 20px;
+    width: auto;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 8px 12px;
+    border-radius: 4px;
+    font-size: 14px;
+    z-index: 1000;
+    transition: opacity 0.5s ease;
+}
+.status-message.success { background: green; }
+.status-message.error { background: red; }
+.status-message.info { background: blue; }
+.fade-out {
+    opacity: 0;
+}
+#brushContainer {
+    position: absolute;
+    top: 0px;
+    left: 0px;
+    z-index: 1000;
+    background: rgba(255,255,255,0.8);
+    padding: 1px; 
+    border-radius: 5px;
+}
+#artworkName {
+  padding: 10px;
+  font-size: 16px;
+  border: 2px solid #ccc;
+  border-radius: 5px;
+  width: 100%;
+  max-width: 300px;
+  box-sizing: border-box;
+  outline: none;
+}
+#artworkName:focus {
+  border-color: #007BFF;
+  box-shadow: 0 0 5px rgba(0, 123, 255, 0.5);
+}
+#artworkName::placeholder {
+  color: #888;
+}
+#brushSizeSliderContainer {
+    position: absolute;
+    width: 180px;
+    height: 50px;
+    padding: 10px;
+    background-color: rgba(255,255,255,0);
+    border-radius: 5px;
+    bottom: 0;
+    z-index: 200;
+}
+
+#brushSizeSlider {
+    pointer-events: auto;
+}
+
+#alleryModal {
+    z-index: 3000;
+}
+
+
+
+</style>
+</head>
+
+<body>
+
+    <canvas id="glCanvas"></canvas>
+
+    <div id="brushContainer"></div>
+
+<div id="brushSizeSliderContainer">
+    <input type="range" id="brushSizeSlider" min="0.01" max="1" step="0.01" value="0.1">
+</div>
+
+    <div id="redoUndoButtons">
+        <div class="bs" id="undoButton">Undo</div>
+        <div class="bs" id="redoButton">Redo</div>
+        <div class="bs" id="cleanButton">Clear</div>
+        <div class="bs" id="eraserToggle">Eraser</div>
+    </div>
+
+    <div id="colorsContainer">
+        <div id="colorPalette"></div>
+        <div id="lightnessPalette"></div>
+        <div id="colorPickerContainer">
+            <input type="color" id="colorPicker" value="#000000">
+        </div>
+    </div>
+
+    <div id="saveGalleryButtons">
+    <div class="bs" id="imageLoaderButton">Image</div>
+
+    <input type="file" id="imageLoader" accept="image/*" style="display:none;">
+        <div class="bs" id="saveCanvasButton">Save PNG</div>
+        <div class="bs" id="saveButton">Save</div>
+        <div class="bs" id="galleryButton">Gallery</div>
+    </div>
+
+    <!-- Modal for Saving Artwork -->
+    <div class="modal" id="saveModal">
+        <div class="modal-content">
+            <span class="close" data-listener-added="true">×</span>
+            <h2>Save Artwork</h2>
+            <input type="text" id="artworkName" placeholder="Enter artwork name">
+            <input type="hidden" id="existingArtworkId"> <!-- Hidden ID for overwrite -->
+            <div class="bs" id="saveNewButton">Save as New</div>
+            <div class="bs" id="overwriteButton">Overwrite</div>
+        </div>
+    </div>
+
+    <!-- Gallery Display -->
+    <div id="galleryModal" class="modal">
+      <div class="modal-content">
+        <span class="close">&times;</span>
+        <h2>Gallery</h2>
+        <div id="gallery"></div>
+      </div>
+    </div>
+
+    <script type="text/javascript" src="draw2.js"></script>
+
+</body>
+</html>
