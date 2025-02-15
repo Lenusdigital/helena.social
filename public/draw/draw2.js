@@ -80,7 +80,7 @@ function hexToRGBA(hex) {
 // Update tintColor when user selects a new color.
 colorPicker.addEventListener("input", (e) => {
   tintColor = hexToRGBA(e.target.value);
-  drawScene();
+  needsRedraw = true; // Trigger a redraw in the next frame
 });
 
 
@@ -1251,8 +1251,6 @@ function drawSingleBrushStamp(fx, fy) {
   
   gl.useProgram(paintProgram);
 
-  // >>> BEGIN: Eraser mode support
-  // Inside drawSingleBrushStamp(), before drawing:
   const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
   if (isErasing) {
     gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
@@ -1261,8 +1259,6 @@ function drawSingleBrushStamp(fx, fy) {
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.uniform1i(eraseUniform, 0);
   }
-
-  // <<< END: Eraser mode support
 
   const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
   gl.uniform1f(flipLoc, 1.0);
@@ -1325,8 +1321,6 @@ function drawSingleBrushStamp(fx, fy) {
 }
 
 
-
-
 function drawBrushStrokeToPaintLayer(x, y) {
   // Save current stroke state for undo/redo
   saveStrokeState();
@@ -1350,23 +1344,18 @@ function drawBrushStrokeToPaintLayer(x, y) {
 
   // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
   if (lineMode && lastFx !== null && lastFy !== null) {
-    // Calculate distance in fixed space.
     const dxFixed = fx - lastFx;
     const dyFixed = fy - lastFy;
     const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
-
-    // Determine the step size based on the brush width and the lineStepFactor.
     const brushW = brushSize * fixedFBOWidth;
     const stepSize = brushW * lineStepFactor;
     const steps = Math.max(1, Math.floor(dist / stepSize));
-
     for (let i = 0; i <= steps; i++) {
       const interpX = lastFx + (dxFixed * i) / steps;
       const interpY = lastFy + (dyFixed * i) / steps;
       drawSingleBrushStamp(interpX, interpY);
     }
   } else {
-    // Otherwise, stamp once at the current point.
     drawSingleBrushStamp(fx, fy);
   }
 
@@ -1378,7 +1367,64 @@ function drawBrushStrokeToPaintLayer(x, y) {
   if (strokeCount >= FLATTEN_THRESHOLD) {
     flattenStrokes();
   }
+  // Mark the scene to be redrawn (the render loop will pick it up)
+  needsRedraw = true;
 }
+
+
+
+// function drawBrushStrokeToPaintLayer(x, y) {
+//   // Save current stroke state for undo/redo
+//   saveStrokeState();
+
+//   // Convert canvas coordinates (x, y) to fixed-FBO space.
+//   const scaleX = fixedFBOWidth / canvas.width;
+//   const scaleY = fixedFBOHeight / canvas.height;
+//   const fx = x * scaleX;
+//   const fy = y * scaleY;
+
+//   // Update dynamic rotation based on canvas movement.
+//   if (lastX !== null && lastY !== null) {
+//     const dx = x - lastX;
+//     const dy = y - lastY;
+//     if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//       currentAngle = Math.atan2(dy, dx);
+//     }
+//   }
+//   lastX = x;
+//   lastY = y;
+
+//   // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
+//   if (lineMode && lastFx !== null && lastFy !== null) {
+//     // Calculate distance in fixed space.
+//     const dxFixed = fx - lastFx;
+//     const dyFixed = fy - lastFy;
+//     const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+
+//     // Determine the step size based on the brush width and the lineStepFactor.
+//     const brushW = brushSize * fixedFBOWidth;
+//     const stepSize = brushW * lineStepFactor;
+//     const steps = Math.max(1, Math.floor(dist / stepSize));
+
+//     for (let i = 0; i <= steps; i++) {
+//       const interpX = lastFx + (dxFixed * i) / steps;
+//       const interpY = lastFy + (dyFixed * i) / steps;
+//       drawSingleBrushStamp(interpX, interpY);
+//     }
+//   } else {
+//     // Otherwise, stamp once at the current point.
+//     drawSingleBrushStamp(fx, fy);
+//   }
+
+//   // Update the last fixed-space coordinates.
+//   lastFx = fx;
+//   lastFy = fy;
+
+//   strokeCount++;
+//   if (strokeCount >= FLATTEN_THRESHOLD) {
+//     flattenStrokes();
+//   }
+// }
 
 
 
@@ -2289,7 +2335,24 @@ document.getElementById("cleanButton").addEventListener("click", clearCanvas);
 //–––––––––––––––––––
 // INITIALIZE & START
 //–––––––––––––––––––
+//–––––––––––––––––––
+// INITIALIZE & START
+//–––––––––––––––––––
 initGL();
 loadDefaultImage();
 loadBrushes();
-drawScene();
+
+// Instead of calling drawScene() directly, use the render loop:
+let needsRedraw = true; // Global flag indicating when to redraw
+
+function renderLoop() {
+  if (needsRedraw) {
+    drawScene();
+    console.log("renderLoop")
+    needsRedraw = false; // Reset after drawing
+  }
+  requestAnimationFrame(renderLoop);
+}
+
+renderLoop();
+
