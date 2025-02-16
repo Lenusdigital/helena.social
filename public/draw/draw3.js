@@ -317,24 +317,34 @@ const quadFS = `
 // `;
 
 const paintFS = `
-  precision mediump float;
-  varying vec2 v_texCoord;
-  uniform sampler2D u_brush;
-  uniform vec4 u_tint;
-  uniform bool u_erase; // Toggle eraser mode
 
-  void main() {
+
+precision mediump float;
+varying vec2 v_texCoord;
+uniform sampler2D u_brush;
+uniform sampler2D u_paintLayer;
+uniform vec4 u_tint;
+uniform float u_opacity;
+uniform bool u_erase;
+
+void main() {
     vec4 brushColor = texture2D(u_brush, v_texCoord);
+    vec4 existingColor = texture2D(u_paintLayer, v_texCoord);
+
     if (u_erase) {
-      // When erasing, output a color whose alpha equals the brush alpha.
-      // With gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA), this will
-      // reduce the underlying alpha (i.e. erase the stroke).
-      gl_FragColor = vec4(0.0, 0.0, 0.0, brushColor.a);
+        gl_FragColor = vec4(existingColor.rgb, existingColor.a * (1.0 - brushColor.a));
     } else {
-      // Normal painting: tint the brush with u_tint.
-      gl_FragColor = vec4(u_tint.rgb, brushColor.a);
+        vec4 newColor = vec4(u_tint.rgb, brushColor.a * u_opacity);
+        
+        // ✅ Proper blending with transparency
+        gl_FragColor = mix(existingColor, newColor, newColor.a);
     }
-  }
+}
+
+
+
+
+
 `;
 
 
@@ -499,30 +509,7 @@ function initPaintLayerFixed() {
 }
 
 
-// function loadDefaultImage() {
-//     let canvas = document.createElement('canvas');
-//     let ctx = canvas.getContext('2d');
-//     let width = window.innerWidth, height = window.innerHeight;
-//     canvas.width = width;
-//     canvas.height = height;
-// // Noise
-//     ctx.fillStyle = '#f2f2f2';
-//     ctx.fillRect(0, 0, width, height);
-// for (let i = 0; i < 0.1 * width * height; i++) {
-//         let x = Math.random() * width;
-//         let y = Math.random() * height;
-//         let alpha = 0.05 + Math.random() * 0.1;
-//         ctx.fillStyle = `rgba(0, 0, 0, ${alpha})`;
-//         ctx.fillRect(x, y, 1, 1);
-//     }
-// // Vignette
-//     let gradient = ctx.createRadialGradient(width / 2, height / 2, 0, width / 2, height / 2, Math.max(width, height) / 2);
-//     gradient.addColorStop(0, 'rgba(0, 0, 0, 0)');
-//     gradient.addColorStop(1, 'rgba(0, 0, 0, 0.3)');
-// ctx.fillStyle = gradient;
-//     ctx.fillRect(0, 0, width, height);
-// return canvas;
-// }
+
 
 
 function loadDefaultImage() {
@@ -612,191 +599,6 @@ function loadDefaultImage() {
 }
 
 
-
-
-
-
-// function loadDefaultImage() {
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Fill with a paper-like base color
-//   ctx.fillStyle = "#faf0e6";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Create a noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     const noise = Math.floor(Math.random() * 60) - 30;
-//     noiseData.data[i] = 250 + noise;
-//     noiseData.data[i + 1] = 240 + noise;
-//     noiseData.data[i + 2] = 230 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.globalAlpha = 0.15;
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Vignette
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.3,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) * 0.5
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.25)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     const value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 20;
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-
-//   // Updated line here:
-//   img.src = baseCanvas.toDataURL("image/png");
-// }
-
-
-
-
-// function loadDefaultImage() {
-//   // Create a base canvas for paper texture
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Create a repeating noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     let noise = Math.floor(Math.random() * 40);
-//     noiseData.data[i] = 200 + noise;
-//     noiseData.data[i + 1] = 200 + noise;
-//     noiseData.data[i + 2] = 200 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Overlay a semi-transparent white layer
-//   ctx.fillStyle = "rgba(255,255,255,0.9)";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add vignette gradient in the corners
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.35,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) / 2
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.3)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add a crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     let value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 30; // subtle noise
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Use the generated canvas as the source image
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-//   img.src = baseCanvas.toDataURL();
-// }
-
-
-
-// function loadDefaultImage() {
-
-//     const img = new Image();
-//     img.crossOrigin = "anonymous";
-//     img.onload = () => {
-//         currentImage = img;
-//         // Set the fixed resolution to the image's dimensions.
-//         fixedFBOWidth = img.width;
-//         fixedFBOHeight = img.height;
-//         // Initialize the persistent paint layer with fixed dimensions.
-//         initPaintLayerFixed();
-//         // Update the canvas size (this scales the view but the FBO remains at the image's size).
-//         updateCanvasSize(img);
-//         createTextureFromImage(img);
-//     };
-//     img.onerror = () => console.error("Failed to load default image.");
-//     img.src = "images/helena-blank.webp";
-// }
 
 
 function loadBrushes() {
@@ -1115,326 +917,6 @@ function addSoundEvents() {
 
 
 
-
-
-// // **Web Audio Context (Fix for iOS)**
-// const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-// let isDrawingSoundActive = false;
-// let gainNode, noiseNode, filterNode;
-
-// // Unique sound-related variables to avoid conflicts
-// let soundLastX = null, soundLastY = null, soundIsMoving = false;
-
-// // **Unlock Web Audio for iOS**
-// function unlockAudio() {
-//     if (audioCtx.state === "suspended") {
-//         audioCtx.resume();
-//     }
-// }
-
-// // **Create Noise Buffer (Sparse Scratch Effect)**
-// function createNoiseBuffer() {
-//     let bufferSize = audioCtx.sampleRate * 0.5; // Shorter buffer for scratch
-//     let buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-//     let data = buffer.getChannelData(0);
-//     for (let i = 0; i < bufferSize; i++) {
-//         data[i] = Math.random() > 0.9 ? (Math.random() * 2 - 1) * 0.5 : 0;
-//     }
-//     return buffer;
-// }
-
-// // **Start Scratch Sound (Only on Movement)**
-// function startDrawingSound(strokeSpeed = 1) {
-//     if (isDrawingSoundActive) return;
-//     isDrawingSoundActive = true;
-
-//     unlockAudio();
-
-//     gainNode = audioCtx.createGain();
-//     gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-
-//     filterNode = audioCtx.createBiquadFilter();
-//     filterNode.type = "bandpass";
-//     filterNode.frequency.value = 400 + strokeSpeed * 300;
-//     filterNode.Q.value = 2.5;
-
-//     noiseNode = audioCtx.createBufferSource();
-//     noiseNode.buffer = createNoiseBuffer();
-//     noiseNode.loop = true;
-
-//     noiseNode.connect(filterNode);
-//     filterNode.connect(gainNode);
-//     gainNode.connect(audioCtx.destination);
-
-//     noiseNode.start();
-// }
-
-// // **Update Scratch Sound (Stroke Speed Changes Frequency & Volume)**
-// function updateDrawingSound(strokeSpeed) {
-//     if (!isDrawingSoundActive) return;
-//     filterNode.frequency.value = 400 + strokeSpeed * 300;
-//     gainNode.gain.linearRampToValueAtTime(Math.min(0.15, 0.05 * strokeSpeed), audioCtx.currentTime + 0.05);
-// }
-
-// // **Stop Scratch Sound (Smooth Fade Out)**
-// function stopDrawingSound() {
-//     if (!isDrawingSoundActive) return;
-//     isDrawingSoundActive = false;
-
-//     gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-//     setTimeout(() => {
-//         if (noiseNode) {
-//             noiseNode.stop();
-//             noiseNode.disconnect();
-//         }
-//         if (filterNode) filterNode.disconnect();
-//         if (gainNode) gainNode.disconnect();
-//     }, 200);
-// }
-
-// // **Fix Pointer & Touch Tracking**
-// function getTouchPos(event) {
-//     const rect = canvas.getBoundingClientRect();
-//     const touch = event.touches[0] || event.changedTouches[0];
-//     return {
-//         x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-//         y: (touch.clientY - rect.top) * (canvas.height / rect.height)
-//     };
-// }
-
-// // **Attach to Drawing Events**
-// function addSoundEvents() {
-//     document.addEventListener("touchstart", unlockAudio, { once: true });
-//     document.addEventListener("click", unlockAudio, { once: true });
-
-//     // **Mouse Events**
-//     canvas.addEventListener("mousedown", () => {
-//         soundIsMoving = false; // Prevents sound from starting until actual movement
-//     });
-
-//     canvas.addEventListener("mousemove", (event) => {
-//         if (!isDrawing) return;
-
-//         let speed = Math.sqrt(event.movementX ** 2 + event.movementY ** 2);
-        
-//         if (!soundIsMoving) {
-//             startDrawingSound(speed);
-//             soundIsMoving = true;
-//         }
-
-//         updateDrawingSound(speed);
-//     });
-
-//     canvas.addEventListener("mouseup", () => {
-//         soundIsMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     canvas.addEventListener("mouseleave", () => {
-//         soundIsMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     // **Touch Events**
-//     canvas.addEventListener("touchstart", (event) => {
-//         event.preventDefault();
-//         isDrawing = true;
-//         soundLastX = null;
-//         soundLastY = null;
-//         soundIsMoving = false;
-//     });
-
-//     canvas.addEventListener("touchmove", (event) => {
-//         event.preventDefault();
-//         if (!isDrawing) return;
-
-//         const pos = getTouchPos(event);
-//         if (soundLastX !== null && soundLastY !== null) {
-//             const dx = pos.x - soundLastX;
-//             const dy = pos.y - soundLastY;
-//             const speed = Math.sqrt(dx * dx + dy * dy);
-            
-//             if (!soundIsMoving) {
-//                 startDrawingSound(speed);
-//                 soundIsMoving = true;
-//             }
-
-//             updateDrawingSound(speed);
-//         }
-//         soundLastX = pos.x;
-//         soundLastY = pos.y;
-//     });
-
-//     canvas.addEventListener("touchend", () => {
-//         soundIsMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     canvas.addEventListener("touchcancel", () => {
-//         soundIsMoving = false;
-//         stopDrawingSound();
-//     });
-// }
-
-
-
-
-
-// // **Web Audio Context (Fix for iOS)**
-// const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-// let isDrawingSoundActive = false;
-// let gainNode, noiseNode, filterNode;
-
-// // **Unlock Web Audio for iOS**
-// function unlockAudio() {
-//     if (audioCtx.state === "suspended") {
-//         audioCtx.resume();
-//     }
-// }
-
-// // **Create Noise Buffer (Sparse Scratch Effect)**
-// function createNoiseBuffer() {
-//     let bufferSize = audioCtx.sampleRate * 0.5; // Shorter buffer for scratch
-//     let buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
-//     let data = buffer.getChannelData(0);
-//     for (let i = 0; i < bufferSize; i++) {
-//         data[i] = Math.random() > 0.9 ? (Math.random() * 2 - 1) * 0.5 : 0;
-//     }
-//     return buffer;
-// }
-
-// // **Start Scratch Sound (Only on Movement)**
-// function startDrawingSound(strokeSpeed = 1) {
-//     if (isDrawingSoundActive) return;
-//     isDrawingSoundActive = true;
-
-//     unlockAudio();
-
-//     gainNode = audioCtx.createGain();
-//     gainNode.gain.setValueAtTime(0, audioCtx.currentTime);
-
-//     filterNode = audioCtx.createBiquadFilter();
-//     filterNode.type = "bandpass";
-//     filterNode.frequency.value = 400 + strokeSpeed * 300;
-//     filterNode.Q.value = 2.5;
-
-//     noiseNode = audioCtx.createBufferSource();
-//     noiseNode.buffer = createNoiseBuffer();
-//     noiseNode.loop = true;
-
-//     noiseNode.connect(filterNode);
-//     filterNode.connect(gainNode);
-//     gainNode.connect(audioCtx.destination);
-
-//     noiseNode.start();
-// }
-
-// // **Update Scratch Sound (Stroke Speed Changes Frequency & Volume)**
-// function updateDrawingSound(strokeSpeed) {
-//     if (!isDrawingSoundActive) return;
-//     filterNode.frequency.value = 400 + strokeSpeed * 300;
-//     gainNode.gain.linearRampToValueAtTime(Math.min(0.15, 0.05 * strokeSpeed), audioCtx.currentTime + 0.05);
-// }
-
-// // **Stop Scratch Sound (Smooth Fade Out)**
-// function stopDrawingSound() {
-//     if (!isDrawingSoundActive) return;
-//     isDrawingSoundActive = false;
-
-//     gainNode.gain.linearRampToValueAtTime(0, audioCtx.currentTime + 0.2);
-//     setTimeout(() => {
-//         if (noiseNode) {
-//             noiseNode.stop();
-//             noiseNode.disconnect();
-//         }
-//         if (filterNode) filterNode.disconnect();
-//         if (gainNode) gainNode.disconnect();
-//     }, 200);
-// }
-
-// // **Fix Pointer & Touch Tracking**
-// // let lastX = null, lastY = null, isMoving = false;
-// function getTouchPos(event) {
-//     const rect = canvas.getBoundingClientRect();
-//     const touch = event.touches[0] || event.changedTouches[0];
-//     return {
-//         x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-//         y: (touch.clientY - rect.top) * (canvas.height / rect.height)
-//     };
-// }
-
-// // **Attach to Drawing Events**
-// function addSoundEvents() {
-//     document.addEventListener("touchstart", unlockAudio, { once: true });
-//     document.addEventListener("click", unlockAudio, { once: true });
-
-//     // **Mouse Events**
-//     canvas.addEventListener("mousedown", () => {
-//         isMoving = false; // Prevents sound from starting until actual movement
-//     });
-
-//     canvas.addEventListener("mousemove", (event) => {
-//         if (!isDrawing) return;
-//         let speed = Math.sqrt(event.movementX ** 2 + event.movementY ** 2);
-        
-//         if (!isMoving) {
-//             startDrawingSound(speed);
-//             isMoving = true;
-//         }
-
-//         updateDrawingSound(speed);
-//     });
-
-//     canvas.addEventListener("mouseup", () => {
-//         isMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     canvas.addEventListener("mouseleave", () => {
-//         isMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     // **Touch Events**
-//     canvas.addEventListener("touchstart", (event) => {
-//         event.preventDefault();
-//         isDrawing = true;
-//         lastX = null;
-//         lastY = null;
-//         isMoving = false;
-//     });
-
-//     canvas.addEventListener("touchmove", (event) => {
-//         event.preventDefault();
-//         if (!isDrawing) return;
-
-//         const pos = getTouchPos(event);
-//         if (lastX !== null && lastY !== null) {
-//             const dx = pos.x - lastX;
-//             const dy = pos.y - lastY;
-//             const speed = Math.sqrt(dx * dx + dy * dy);
-            
-//             if (!isMoving) {
-//                 startDrawingSound(speed);
-//                 isMoving = true;
-//             }
-
-//             updateDrawingSound(speed);
-//         }
-//         lastX = pos.x;
-//         lastY = pos.y;
-//     });
-
-//     canvas.addEventListener("touchend", () => {
-//         isMoving = false;
-//         stopDrawingSound();
-//     });
-
-//     canvas.addEventListener("touchcancel", () => {
-//         isMoving = false;
-//         stopDrawingSound();
-//     });
-// }
 
 
 
@@ -1821,7 +1303,6 @@ let lastFx = null,
     lastFy = null; // Store previous fixed‑FBO coordinates
 
 
-
 function drawSingleBrushStamp(fx, fy) {
     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
     gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
@@ -1829,23 +1310,35 @@ function drawSingleBrushStamp(fx, fy) {
 
     gl.useProgram(paintProgram);
 
-    // ✅ FIX: Use correct blend mode for opacity-based layering
-    gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
+    // ✅ Use Multiply-like blending for color mixing and transparency
+    // gl.blendFunc(gl.DST_COLOR, gl.ZERO);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); 
 
     // Send erase mode
     const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
     gl.uniform1i(eraseUniform, isErasing ? 1 : 0);
 
+    // Send opacity separately to shader
+    const opacityLoc = gl.getUniformLocation(paintProgram, "u_opacity");
+    gl.uniform1f(opacityLoc, opacity);
+
     // Flip Y for correct orientation
     const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
     gl.uniform1f(flipLoc, 1.0);
-    
+
+    // Set resolution
     const resLoc = gl.getUniformLocation(paintProgram, "u_resolution");
     gl.uniform2f(resLoc, fixedFBOWidth, fixedFBOHeight);
 
-    // ✅ FIX: Respect Opacity (RGBA)
+    // ✅ Ensure proper RGBA tinting with opacity
     const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
-    gl.uniform4fv(tintLoc, tintColor); 
+    gl.uniform4f(
+        tintLoc,
+        tintColor[0],  // Red
+        tintColor[1],  // Green
+        tintColor[2],  // Blue
+        opacity        // Apply user-defined opacity
+    );
 
     // Compute brush size and rotation
     const brushW = brushSize * fixedFBOWidth;
@@ -1906,44 +1399,35 @@ function drawSingleBrushStamp(fx, fy) {
 }
 
 
-// Get the opacity slider
-const opacitySlider = document.getElementById("opacitySlider");
 
-// Initialize opacity
-let opacity = parseFloat(opacitySlider.value);
-
-// Update opacity uniform when slider changes
-opacitySlider.addEventListener("input", (e) => {
-    opacity = parseFloat(e.target.value);
-    console.log("opacity", opacity)
-    drawScene(); // Redraw canvas when opacity changes
-});
 
 
 // function drawSingleBrushStamp(fx, fy) {
 //     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
 //     gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
 //     gl.enable(gl.BLEND);
-    
+
 //     gl.useProgram(paintProgram);
 
-//     // Set proper blending for smooth opacity blending
-//     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+//     // ✅ FIX: Use correct blend mode for opacity-based layering
+//     gl.blendFuncSeparate(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA, gl.ONE, gl.ONE_MINUS_SRC_ALPHA);
 
 //     // Send erase mode
 //     const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
 //     gl.uniform1i(eraseUniform, isErasing ? 1 : 0);
 
+//     // Flip Y for correct orientation
 //     const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
 //     gl.uniform1f(flipLoc, 1.0);
     
 //     const resLoc = gl.getUniformLocation(paintProgram, "u_resolution");
 //     gl.uniform2f(resLoc, fixedFBOWidth, fixedFBOHeight);
-    
-//     const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
-//     gl.uniform4fv(tintLoc, tintColor);
 
-//     // Calculate rotated brush quad
+//     // ✅ FIX: Respect Opacity (RGBA)
+//     const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
+//     gl.uniform4fv(tintLoc, tintColor); 
+
+//     // Compute brush size and rotation
 //     const brushW = brushSize * fixedFBOWidth;
 //     const brushH = brushW / brushAspect;
 //     const halfW = brushW / 2;
@@ -2002,82 +1486,20 @@ opacitySlider.addEventListener("input", (e) => {
 // }
 
 
+// Get the opacity slider
+const opacitySlider = document.getElementById("opacitySlider");
 
-// function drawSingleBrushStamp(fx, fy) {
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-//     gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
-//     gl.enable(gl.BLEND);
+// Initialize opacity
+let opacity = parseFloat(opacitySlider.value);
 
-//     gl.useProgram(paintProgram);
+// Update opacity uniform when slider changes
+opacitySlider.addEventListener("input", (e) => {
+    opacity = parseFloat(e.target.value);
+    console.log("opacity", opacity)
+    drawScene(); // Redraw canvas when opacity changes
+});
 
-//     const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
-//     if (isErasing) {
-//         gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
-//         gl.uniform1i(eraseUniform, 1);
-//     } else {
-//         gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-//         gl.uniform1i(eraseUniform, 0);
-//     }
 
-//     const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, 1.0);
-//     const resLoc = gl.getUniformLocation(paintProgram, "u_resolution");
-//     gl.uniform2f(resLoc, fixedFBOWidth, fixedFBOHeight);
-//     const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
-//     gl.uniform4fv(tintLoc, tintColor);
-
-//     const brushW = brushSize * fixedFBOWidth;
-//     const brushH = brushW / brushAspect;
-//     const halfW = brushW / 2;
-//     const halfH = brushH / 2;
-//     const offsets = [
-//         { x: -halfW, y: -halfH },
-//         { x: halfW, y: -halfH },
-//         { x: -halfW, y: halfH },
-//         { x: halfW, y: halfH }
-//     ];
-//     const cosA = Math.cos(currentAngle);
-//     const sinA = Math.sin(currentAngle);
-//     const rotated = offsets.map(off => ({
-//         x: off.x * cosA - off.y * sinA,
-//         y: off.x * sinA + off.y * cosA
-//     }));
-//     const v0 = { x: fx + rotated[0].x, y: fy + rotated[0].y };
-//     const v1 = { x: fx + rotated[1].x, y: fy + rotated[1].y };
-//     const v2 = { x: fx + rotated[2].x, y: fy + rotated[2].y };
-//     const v3 = { x: fx + rotated[3].x, y: fy + rotated[3].y };
-
-//     const vertices = new Float32Array([
-//         v0.x, v0.y, 0, 0,
-//         v1.x, v1.y, 1, 0,
-//         v2.x, v2.y, 0, 1,
-//         v2.x, v2.y, 0, 1,
-//         v1.x, v1.y, 1, 0,
-//         v3.x, v3.y, 1, 1
-//     ]);
-
-//     const buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
-
-//     const posLoc = gl.getAttribLocation(paintProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-//     const texLoc = gl.getAttribLocation(paintProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, overlayTexture);
-//     const brushUniform = gl.getUniformLocation(paintProgram, "u_brush");
-//     gl.uniform1i(brushUniform, 0);
-
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-//     gl.disableVertexAttribArray(posLoc);
-//     gl.disableVertexAttribArray(texLoc);
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-// }
 
 
 
@@ -2130,65 +1552,7 @@ function drawBrushStrokeToPaintLayer(x, y) {
 }
 
 
-
-// function drawBrushStrokeToPaintLayer(x, y) {
-//     // Save current stroke state for undo/redo
-//     saveStrokeState();
-
-//     // Convert canvas coordinates (x, y) to fixed-FBO space.
-//     const scaleX = fixedFBOWidth / canvas.width;
-//     const scaleY = fixedFBOHeight / canvas.height;
-//     const fx = x * scaleX;
-//     const fy = y * scaleY;
-
-//     // Update dynamic rotation based on canvas movement.
-//     if (lastX !== null && lastY !== null) {
-//         const dx = x - lastX;
-//         const dy = y - lastY;
-//         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-//             currentAngle = Math.atan2(dy, dx);
-//         }
-//     }
-//     lastX = x;
-//     lastY = y;
-
-//     // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
-//     if (lineMode && lastFx !== null && lastFy !== null) {
-//         const dxFixed = fx - lastFx;
-//         const dyFixed = fy - lastFy;
-//         const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
-//         const brushW = brushSize * fixedFBOWidth;
-//         const stepSize = brushW * lineStepFactor;
-//         const steps = Math.max(1, Math.floor(dist / stepSize));
-//         for (let i = 0; i <= steps; i++) {
-//             const interpX = lastFx + (dxFixed * i) / steps;
-//             const interpY = lastFy + (dyFixed * i) / steps;
-//             drawSingleBrushStamp(interpX, interpY);
-//         }
-//     } else {
-//         drawSingleBrushStamp(fx, fy);
-//     }
-
-//     // Update the last fixed-space coordinates.
-//     lastFx = fx;
-//     lastFy = fy;
-
-//     strokeCount++;
-//     if (strokeCount >= FLATTEN_THRESHOLD) {
-//         flattenStrokes();
-//     }
-//     // Mark the scene to be redrawn (the render loop will pick it up)
-//     needsRedraw = true;
-// }
-
-
-
-
-
-
-
-
-
+    
 function drawBrushOverlay() {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -2346,156 +1710,6 @@ function drawScene() {
 }
 
 
-// function drawScene() {
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     gl.viewport(0, 0, canvas.width, canvas.height);
-//     gl.clearColor(1, 1, 1, 1);
-//     gl.clear(gl.COLOR_BUFFER_BIT);
-
-//     // ✅ 1. Draw background image first
-//     gl.useProgram(quadProgram);
-//     let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-
-//     let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-
-//     const quadVertices = new Float32Array([
-//         0, 0, 0, 0,
-//         canvas.width, 0, 1, 0,
-//         0, canvas.height, 0, 1,
-//         0, canvas.height, 0, 1,
-//         canvas.width, 0, 1, 0,
-//         canvas.width, canvas.height, 1, 1
-//     ]);
-
-//     let buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-
-//     let posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-
-//     let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, texture);
-//     const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
-//     gl.uniform1i(texUniform, 0);
-
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-
-//     // ✅ 2. Draw persistent paint layer (Ensure correct blending)
-//     gl.enable(gl.BLEND);
-//     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); // Ensures proper alpha blending
-
-//     gl.useProgram(quadProgram);
-//     flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-
-//     buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-
-//     posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-
-//     texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-//     gl.uniform1i(texUniform, 0);
-
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-//     gl.disable(gl.BLEND);
-
-//     // ✅ 3. Draw brush overlay last (for preview)
-//     gl.useProgram(overlayProgram);
-//     flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-
-//     drawBrushOverlay();
-// }
-
-
-
-// // Update drawScene by removing the internal requestAnimationFrame call:
-// function drawScene() {
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     gl.viewport(0, 0, canvas.width, canvas.height);
-//     gl.clearColor(1, 1, 1, 1);
-//     gl.clear(gl.COLOR_BUFFER_BIT);
-
-//     // Draw background image using quadProgram
-//     gl.useProgram(quadProgram);
-//     let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-//     const quadVertices = new Float32Array([
-//         0, 0, 0, 0,
-//         canvas.width, 0, 1, 0,
-//         0, canvas.height, 0, 1,
-//         0, canvas.height, 0, 1,
-//         canvas.width, 0, 1, 0,
-//         canvas.width, canvas.height, 1, 1
-//     ]);
-//     let buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-//     let posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-//     let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, texture);
-//     const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
-//     gl.uniform1i(texUniform, 0);
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-
-//     // Draw persistent paint layer
-//     gl.enable(gl.BLEND);
-//     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-//     gl.useProgram(quadProgram);
-//     flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-//     posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-//     texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-//     gl.uniform1i(texUniform, 0);
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-//     gl.disable(gl.BLEND);
-
-//     // Draw brush overlay
-//     gl.useProgram(overlayProgram);
-//     flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-//     drawBrushOverlay();
-// }
 
 
 //–––––––––––––––––––
@@ -2536,10 +1750,6 @@ imageLoaderButton.addEventListener("click", () => {
 imageLoaderButton.addEventListener("touchend", () => {
   document.getElementById("imageLoader").click();
 });
-
-
-
-
 
 
 
