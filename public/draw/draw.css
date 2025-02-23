@@ -22,6 +22,10 @@ canvas {
     display: flex;
     justify-content: center;
     align-items: center;
+
+    gap: 1rem;
+    flex-direction: column;    
+    
     padding: 10px;
     background-color: rgba(255,255,255,0);
     border-radius: 5px;
@@ -38,6 +42,12 @@ canvas {
     align-items: center;
     display: none;
 }
+
+#eraseStrengthSlider {
+
+}
+
+
 
 
 input[type="range"] {
@@ -60,7 +70,7 @@ input[type="range"]::-webkit-slider-runnable-track {
 /* Square Thumb for Chrome & Safari */
 input[type="range"]::-webkit-slider-thumb {
     -webkit-appearance: none;
-    width: 30px;
+    width: 20px;
     height: 30px;
     background: black;
     border: 3px solid rgba(255,255,255,0.05);
@@ -72,7 +82,7 @@ input[type="range"]::-webkit-slider-thumb {
 
 /* Square Thumb for Firefox */
 input[type="range"]::-moz-range-thumb {
-    width: 30px;
+    width: 20px;
     height: 30px;
     background: #fff;
     border: 3px solid #007bff;
@@ -83,7 +93,7 @@ input[type="range"]::-moz-range-thumb {
 
 /* Square Thumb for Edge */
 input[type="range"]::-ms-thumb {
-    width: 30px;
+    width: 20px;
     height: 30px;
     background: #fff;
     border: 3px solid #007bff;
@@ -92,29 +102,53 @@ input[type="range"]::-ms-thumb {
     box-shadow: 0 0 8px rgba(0, 123, 255, 0.4);
 }
 
+
+
+
 #colorPalette {
-  width: 34px;
-  height: 300px;
+  width: 40px;
+  height: 200px;
   background: linear-gradient(to bottom, red, yellow, green, cyan, blue, magenta, red);
+  border-radius: 5px;
+  cursor: pointer;
+  display: inline-flex;
+  position: relative;
+}
+
+#lightnessPalette {
+  position: relative;
+  width: 40px;
+  height: 200px;
+  background: linear-gradient(to bottom, black, white);
   border-radius: 5px;
   cursor: pointer;
   display: inline-flex;
 }
 
-#lightnessPalette {
-    position: relative;
-    width: 34px;
-    height: 300px;
-    background: linear-gradient(to bottom, black, white);
-    border-radius: 5px;
-    cursor: pointer;
-    display: inline-flex;
+#colorPalette .indicator,
+#lightnessPalette .indicator {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 12px;
+  height: 12px;
+  border: 2px solid white;
+  border-radius: 50%;
+  background: none;
+  pointer-events: none;
 }
 
+.indicator {
+    mix-blend-mode: difference;
+}
+
+
+
+
 input[type="color" i] {
-    width: 72px;
+    width: 84px;
     height: 48px;
-    border: 0px solid #dbdbdb;
+    border: 4px solid rgba(255,255,255,0.25);
     border-radius: 14px;
     padding: 0rem;
     cursor: pointer;
@@ -145,7 +179,8 @@ input[type="color" i]:hover {
 #colorsContainer {
     position: absolute;
     right: 0;
-    bottom: 40px;
+    bottom: 44px;
+    padding: 0.2rem;
 }
 
 #eraserToggle {
@@ -158,7 +193,7 @@ input[type="color" i]:hover {
 
 .bs {
     border: 1px solid rgba(0,0,0,0.022);
-    background: rgba(0,0,0,0.05);
+    background: rgba(255,255,255,.0);
     padding: 0.45rem;
     font-size: 0.8rem;
     border-radius: 0.5rem;
@@ -169,6 +204,7 @@ input[type="color" i]:hover {
     text-align: center;
     margin: 0.15rem;
     display: inline-flex;
+    user-select: none;
 }
 
 .bs:hover {
@@ -176,8 +212,8 @@ input[type="color" i]:hover {
 }
 
 .bs img {
-    width: 1.1rem; /* Adjust as needed */
-    height: 1.1rem; /* Adjust as needed */
+    width: 1.5rem; /* Adjust as needed */
+    height: 1.5rem; /* Adjust as needed */
     display: block;
 }
 
@@ -236,7 +272,9 @@ input[type="color" i]:hover {
 }
 
 .modal { display: none; position: fixed; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.5);
-    z-index: 400; 
+    z-index: 4000;
+    justify-content: center;
+    flex-direction: column;    
 }
 
 .modal-content { padding: 20px; margin: 10% auto; width: 90%; text-align: center; 
@@ -245,10 +283,36 @@ input[type="color" i]:hover {
     z-index: 1000;
 }
 .close { 
-    float: right; 
+    float: right;
     cursor: pointer;
     font-size: 1.5rem;
-    color: red; 
+    color: #000000;
+    background-color: rgb(183 183 183 / 20%);
+    border-radius: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    flex-direction: column;
+    align-content: center;
+    justify-content: space-evenly;
+    align-items: center;
+    transition: all 0.15s ease-in-out;
+}
+
+.close:hover {
+    color: #ffffff;
+    background-color: rgb(183 183 183 / 40%);
+}
+
+.close:active {
+    color: #000000;
+    background-color: rgb(183 183 183 / 80%);
+}
+
+
+#gallery {
+  overflow-y: auto;
+  max-height: 80vh;
 }
 
 .gallery-item { display: inline-block; margin: 5px; cursor: pointer; }
@@ -277,8 +341,46 @@ input[type="color" i]:hover {
 }
 
 .status-message {
+  position: fixed;
+  bottom: 50%;
+  left: 50%;
+  transform: translate(-50%, 50%);
+  padding: 8px 12px;
+  border-radius: 4px;
+  font-size: 14px;
+  z-index: 1000;
+  color: black;
+  transition: opacity 0.5s ease;
+  /* Create a repeating rainbow gradient.
+     The sequence starts at red and ends at red so it repeats seamlessly. */
+  background: repeating-linear-gradient(
+    90deg,
+        rgba(255,255,255,1),  rgba(255,255,255,0.9),  rgba(255,255,255,1)
+  );
+  /* Set the background-size so that one complete cycle spans 200% of the element.
+     (You may need to tweak this value to match your desired look.) */
+  background-size: 200% 100%;
+  /* Animate the background position continuously from 0 to -200% */
+  animation: rainbow 1s linear infinite;
+}
+
+@keyframes rainbow {
+  0% {
+    background-position: 0 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+
+
+
+
+
+/*.status-message {
     position: fixed;
-    bottom: 20px;
+    bottom: 50%;
     width: auto;
     text-align: center;
     background: rgba(0, 0, 0, 0.8);
@@ -294,7 +396,7 @@ input[type="color" i]:hover {
 
 .status-message.error { background: red; }
 
-.status-message.info { background: blue; }
+.status-message.info { background: blue; }*/
 
 .fade-out {
     opacity: 0;
@@ -311,6 +413,7 @@ input[type="color" i]:hover {
     padding: 1px; 
     border-radius: 5px;
     user-select: none;
+    box-shadow: 1px 1px 11px 3px #00000008;
 }
 
 #artworkName {
@@ -344,3 +447,62 @@ input[type="color" i]:hover {
 #opacitySlider {
     display: block;
 }
+
+#footer {
+    position: absolute;
+    z-index: 100000;
+    width: 100%;
+    pointer-events: none;
+    user-select: none;
+    font-size: 0.51rem;
+    text-align: center;
+    top: 0;
+    padding: 0.2rem;
+    font-family: sans-serif;
+    letter-spacing: 2px;
+    text-shadow: 1px 1px 0 white;
+}
+
+
+
+#brushContainer,
+#brushSizeSliderContainer,
+#redoUndoButtons,
+#colorsContainer,
+#saveGalleryButtons {
+    opacity: 1;
+    transition: opacity 0.15s ease-in-out;
+}
+
+
+/*#brushSizeSliderContainer {
+  position: fixed;
+  bottom: 10px;
+  left: 10px;
+  width: 200px;
+  background-color: rgba(255, 255, 255, 0.8);
+  padding: 10px;
+  border-radius: 5px;
+  z-index: 100;
+}*/
+
+.slider-group {
+  margin-bottom: 10px;
+}
+
+.slider-group label {
+  display: block;
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+
+.slider-group input[type="range"] {
+  width: 100%;
+}
+
+
+
+
+
+
+

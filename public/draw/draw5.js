@@ -1,4 +1,4 @@
-console.log("draw2.js - Helena Paint ")
+console.log("Helena Paint - draw5.js")
 
 const canvas = document.getElementById("glCanvas");
 
@@ -11,6 +11,7 @@ const colorPicker = document.getElementById("colorPicker");
 // List of brush image URLs and storage for loaded textures/aspect ratios.
 const brushFiles = [
 
+    "images/brushes/dot.webp",
     "images/brushes/fine-liner-2.webp",
     "images/brushes/12.webp",
     "images/brushes/11.webp",
@@ -52,7 +53,7 @@ let paintProgram;
 // overlayProgram: draws the brush preview tinted with the selected color
 let overlayProgram;
 
-let brushSize = 0.1; // normalized to canvas width
+let brushSize = 0.02; // normalized to canvas width
 let overlayPosition = [0, 0]; // normalized [x,y] (0–1)
 
 let isDrawing = false;
@@ -76,19 +77,63 @@ function hexToRGBA(hex) {
     return [r, g, b, 1.0];
 }
 
-// Update tintColor when user selects a new color.
+
+function hexToHSL(hex) {
+  hex = hex.replace(/^#/, "");
+  if (hex.length === 3) {
+    hex = hex.split("").map(x => x + x).join("");
+  }
+  let r = parseInt(hex.substr(0, 2), 16) / 255,
+      g = parseInt(hex.substr(2, 2), 16) / 255,
+      b = parseInt(hex.substr(4, 2), 16) / 255;
+  let max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    let d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h, s, l };
+}
+
 colorPicker.addEventListener("input", (e) => {
-    tintColor = hexToRGBA(e.target.value);
-    needsRedraw = true; // Trigger a redraw in the next frame
+  tintColor = hexToRGBA(e.target.value);
+  const hsl = hexToHSL(e.target.value);
+  baseColor = hexToRGBA(e.target.value).slice(0, 3);
+  lightnessFactor = hsl.l;
+  updateLightnessGradient();
+  updateFinalColor();
+  const indicatorColor = colorPalette.querySelector(".indicator");
+  if (indicatorColor) {
+    indicatorColor.style.top =
+      hsl.h * (colorPalette.clientHeight - indicatorColor.clientHeight) + "px";
+  }
+  const indicatorLightness = lightnessPalette.querySelector(".indicator");
+  if (indicatorLightness) {
+    indicatorLightness.style.top =
+      hsl.l * (lightnessPalette.clientHeight - indicatorLightness.clientHeight) + "px";
+  }
 });
+
+
+// // Update tintColor when user selects a new color.
+// colorPicker.addEventListener("input", (e) => {
+//     tintColor = hexToRGBA(e.target.value);
+//     needsRedraw = true; // Trigger a redraw in the next frame
+// });
 
 
 
 const colorPalette = document.getElementById("colorPalette");
-
 const lightnessPalette = document.getElementById("lightnessPalette");
-
-let baseColor = [1, 0, 0]; // Default red
+let baseColor = [0, 0, 0]; // Default red
 let lightnessFactor = 0.5; // Default 50%
 
 
@@ -103,62 +148,62 @@ function updateLightnessGradient() {
 }
 
 function pickBaseColor(event) {
-    const rect = colorPalette.getBoundingClientRect();
-    const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
-    const ratio = Math.max(0, Math.min(1, y / rect.height));
-
-    const colors = [
-        [255, 0, 0],
-        [255, 255, 0],
-        [0, 255, 0],
-        [0, 255, 255],
-        [0, 0, 255],
-        [255, 0, 255],
-        [255, 0, 0]
-    ];
-
-    const index = Math.floor(ratio * (colors.length - 1));
-    const nextIndex = Math.min(index + 1, colors.length - 1);
-    const mix = (ratio * (colors.length - 1)) % 1;
-
-    baseColor = [
-        (colors[index][0] * (1 - mix) + colors[nextIndex][0] * mix) / 255,
-        (colors[index][1] * (1 - mix) + colors[nextIndex][1] * mix) / 255,
-        (colors[index][2] * (1 - mix) + colors[nextIndex][2] * mix) / 255
-    ];
-
-    updateLightnessGradient(); // Update gradient dynamically with correct colors
-    updateFinalColor();
+  const rect = colorPalette.getBoundingClientRect();
+  const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+  const ratio = Math.max(0, Math.min(1, y / rect.height));
+  const colors = [
+    [255, 0, 0],
+    [255, 255, 0],
+    [0, 255, 0],
+    [0, 255, 255],
+    [0, 0, 255],
+    [255, 0, 255],
+    [255, 0, 0]
+  ];
+  const index = Math.floor(ratio * (colors.length - 1));
+  const nextIndex = Math.min(index + 1, colors.length - 1);
+  const mix = (ratio * (colors.length - 1)) % 1;
+  baseColor = [
+    (colors[index][0] * (1 - mix) + colors[nextIndex][0] * mix) / 255,
+    (colors[index][1] * (1 - mix) + colors[nextIndex][1] * mix) / 255,
+    (colors[index][2] * (1 - mix) + colors[nextIndex][2] * mix) / 255
+  ];
+  updateLightnessGradient();
+  updateFinalColor();
+  const indicator = colorPalette.querySelector('.indicator');
+  if (indicator) {
+    indicator.style.top = (ratio * (colorPalette.clientHeight - indicator.clientHeight)) + "px";
+  }
 }
-
 
 function pickLightness(event) {
-    const rect = lightnessPalette.getBoundingClientRect();
-    const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
-    lightnessFactor = Math.max(0, Math.min(1, y / rect.height));
-    updateFinalColor();
+  const rect = lightnessPalette.getBoundingClientRect();
+  const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+  const ratio = Math.max(0, Math.min(1, y / rect.height));
+  lightnessFactor = ratio;
+  updateFinalColor();
+  const indicator = lightnessPalette.querySelector('.indicator');
+  if (indicator) {
+    indicator.style.top = (ratio * (lightnessPalette.clientHeight - indicator.clientHeight)) + "px";
+  }
 }
+
+
+
 
 function updateFinalColor() {
     const r = Math.round(baseColor[0] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
     const g = Math.round(baseColor[1] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
     const b = Math.round(baseColor[2] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
-
     tintColor = [r / 255, g / 255, b / 255, 1];
-
     // Convert RGB to HEX
     const hexColor = rgbToHex(r, g, b);
-
     // Update the color picker's value
-
     console.log("hexColor", hexColor)
-
     document.getElementById("colorPicker").value = hexColor;
-
     //drawScene();
     needsRedraw = true;
 }
-
 
 
 // Convert HEX to RGBA (ensures correct format)
@@ -210,7 +255,6 @@ function hexToRGBA(hex) {
 }
 
 
-
 // Add event listeners for both desktop & mobile interactions
 ["mousedown", "touchstart"].forEach(event => {
     colorPalette.addEventListener(event, (e) => {
@@ -242,8 +286,6 @@ document.addEventListener("touchmove", function(event) {
         event.preventDefault();
     }
 }, { passive: false });
-
-
 
 
 //–––––––––––––––––––
@@ -646,193 +688,6 @@ function loadDefaultImage() {
 
   img.src = baseCanvas.toDataURL("image/png");
 }
-
-
-
-
-
-
-// function loadDefaultImage() {
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Fill with a paper-like base color
-//   ctx.fillStyle = "#faf0e6";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Create a noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     const noise = Math.floor(Math.random() * 60) - 30;
-//     noiseData.data[i] = 250 + noise;
-//     noiseData.data[i + 1] = 240 + noise;
-//     noiseData.data[i + 2] = 230 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.globalAlpha = 0.15;
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Vignette
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.3,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) * 0.5
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.25)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     const value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 20;
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-
-//   // Updated line here:
-//   img.src = baseCanvas.toDataURL("image/png");
-// }
-
-
-
-
-// function loadDefaultImage() {
-//   // Create a base canvas for paper texture
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Create a repeating noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     let noise = Math.floor(Math.random() * 40);
-//     noiseData.data[i] = 200 + noise;
-//     noiseData.data[i + 1] = 200 + noise;
-//     noiseData.data[i + 2] = 200 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Overlay a semi-transparent white layer
-//   ctx.fillStyle = "rgba(255,255,255,0.9)";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add vignette gradient in the corners
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.35,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) / 2
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.3)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add a crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     let value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 30; // subtle noise
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Use the generated canvas as the source image
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-//   img.src = baseCanvas.toDataURL();
-// }
-
-
-
-// function loadDefaultImage() {
-
-//     const img = new Image();
-//     img.crossOrigin = "anonymous";
-//     img.onload = () => {
-//         currentImage = img;
-//         // Set the fixed resolution to the image's dimensions.
-//         fixedFBOWidth = img.width;
-//         fixedFBOHeight = img.height;
-//         // Initialize the persistent paint layer with fixed dimensions.
-//         initPaintLayerFixed();
-//         // Update the canvas size (this scales the view but the FBO remains at the image's size).
-//         updateCanvasSize(img);
-//         createTextureFromImage(img);
-//     };
-//     img.onerror = () => console.error("Failed to load default image.");
-//     img.src = "images/helena-blank.webp";
-// }
 
 
 function loadBrushes() {
@@ -1584,28 +1439,29 @@ canvas.addEventListener("touchstart", (event) => {
 // BRUSH SWITCHING (keys 1,2,3 …)
 //–––––––––––––––––––
 document.addEventListener("keydown", (event) => {
-    let shouldRedraw = false; // Track if we need to redraw
-
-    if (event.key === "[") {
-        brushSize = Math.max(0.01, brushSize - 0.02);
-        shouldRedraw = true;
-    } else if (event.key === "]") {
-        brushSize = Math.min(1.0, brushSize + 0.02);
-        shouldRedraw = true;
-    } else if (!isNaN(event.key)) {
-        let index = parseInt(event.key) - 1;
-        if (index >= 0 && index < brushTextures.length) {
-            currentBrushIndex = index;
-            overlayTexture = brushTextures[index];
-            brushAspect = brushAspects[index];
-            shouldRedraw = true;
-        }
+  let shouldRedraw = false;
+  if (event.key === "[") {
+    brushSize = Math.max(0.01, brushSize - 0.02);
+    brushSizeSlider.value = brushSize;
+    shouldRedraw = true;
+  } else if (event.key === "]") {
+    brushSize = Math.min(1.0, brushSize + 0.02);
+    brushSizeSlider.value = brushSize;
+    shouldRedraw = true;
+  } else if (!isNaN(event.key)) {
+    let index = parseInt(event.key) - 1;
+    if (index >= 0 && index < brushTextures.length) {
+      currentBrushIndex = index;
+      overlayTexture = brushTextures[index];
+      brushAspect = brushAspects[index];
+      shouldRedraw = true;
     }
-
-    if (shouldRedraw) {
-        needsRedraw = true;
-    }
+  }
+  if (shouldRedraw) {
+    needsRedraw = true;
+  }
 });
+
 
 
 const brushSizeSlider = document.getElementById("brushSizeSlider");
@@ -2863,7 +2719,7 @@ document.getElementById("shareButton").addEventListener("click", shareCurrentArt
 
     // Modal handling
     function showModal(modal) {
-        modal.style.display = "block";
+        modal.style.display = "flex";
 
         // Ensure event listeners are only added once
         setTimeout(() => {
@@ -2941,36 +2797,8 @@ function clearCanvas() {
 // Event listener for the Clean button
 document.getElementById("cleanButton").addEventListener("click", clearCanvas);
 
-
-// Vaanishing UI
-// const uiElements = [
-//   { id: "brushContainer", display: "block" },
-//   { id: "brushSizeSliderContainer", display: "block" },
-//   { id: "redoUndoButtons", display: "flex" },
-//   { id: "colorsContainer", display: "block" },
-//   { id: "saveGalleryButtons", display: "block" }
-// ];
-
-// const hideUI = () =>
-//   uiElements.forEach(item => {
-//     const el = document.getElementById(item.id);
-//     if (el) el.style.display = "none";
-//   });
-
-// const showUI = () =>
-//   uiElements.forEach(item => {
-//     const el = document.getElementById(item.id);
-//     if (el) el.style.display = item.display;
-//   });
-
-// canvas.addEventListener("mousedown", hideUI);
-// canvas.addEventListener("touchstart", hideUI);
-// canvas.addEventListener("mouseup", () => setTimeout(showUI, 1000));
-// canvas.addEventListener("touchend", () => setTimeout(showUI, 1000));
-
-
 const uiElements = [
-  { id: "brushContainer", display: "block" },
+  { id: "brushContainer", display: "flex" },
   { id: "brushSizeSliderContainer", display: "block" },
   { id: "redoUndoButtons", display: "flex" },
   { id: "colorsContainer", display: "block" },

@@ -1,4 +1,4 @@
-console.log("draw2.js - Helena Paint ")
+console.log("Helena Paint - draw7.js")
 
 const canvas = document.getElementById("glCanvas");
 
@@ -11,6 +11,7 @@ const colorPicker = document.getElementById("colorPicker");
 // List of brush image URLs and storage for loaded textures/aspect ratios.
 const brushFiles = [
 
+    "images/brushes/dot.webp",
     "images/brushes/fine-liner-2.webp",
     "images/brushes/12.webp",
     "images/brushes/11.webp",
@@ -52,7 +53,7 @@ let paintProgram;
 // overlayProgram: draws the brush preview tinted with the selected color
 let overlayProgram;
 
-let brushSize = 0.1; // normalized to canvas width
+let brushSize = 0.02; // normalized to canvas width
 let overlayPosition = [0, 0]; // normalized [x,y] (0–1)
 
 let isDrawing = false;
@@ -76,19 +77,63 @@ function hexToRGBA(hex) {
     return [r, g, b, 1.0];
 }
 
-// Update tintColor when user selects a new color.
+
+function hexToHSL(hex) {
+  hex = hex.replace(/^#/, "");
+  if (hex.length === 3) {
+    hex = hex.split("").map(x => x + x).join("");
+  }
+  let r = parseInt(hex.substr(0, 2), 16) / 255,
+      g = parseInt(hex.substr(2, 2), 16) / 255,
+      b = parseInt(hex.substr(4, 2), 16) / 255;
+  let max = Math.max(r, g, b), min = Math.min(r, g, b);
+  let h, s, l = (max + min) / 2;
+  if (max === min) {
+    h = s = 0;
+  } else {
+    let d = max - min;
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+    switch (max) {
+      case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+      case g: h = (b - r) / d + 2; break;
+      case b: h = (r - g) / d + 4; break;
+    }
+    h /= 6;
+  }
+  return { h, s, l };
+}
+
 colorPicker.addEventListener("input", (e) => {
-    tintColor = hexToRGBA(e.target.value);
-    needsRedraw = true; // Trigger a redraw in the next frame
+  tintColor = hexToRGBA(e.target.value);
+  const hsl = hexToHSL(e.target.value);
+  baseColor = hexToRGBA(e.target.value).slice(0, 3);
+  lightnessFactor = hsl.l;
+  updateLightnessGradient();
+  updateFinalColor();
+  const indicatorColor = colorPalette.querySelector(".indicator");
+  if (indicatorColor) {
+    indicatorColor.style.top =
+      hsl.h * (colorPalette.clientHeight - indicatorColor.clientHeight) + "px";
+  }
+  const indicatorLightness = lightnessPalette.querySelector(".indicator");
+  if (indicatorLightness) {
+    indicatorLightness.style.top =
+      hsl.l * (lightnessPalette.clientHeight - indicatorLightness.clientHeight) + "px";
+  }
 });
+
+
+// // Update tintColor when user selects a new color.
+// colorPicker.addEventListener("input", (e) => {
+//     tintColor = hexToRGBA(e.target.value);
+//     needsRedraw = true; // Trigger a redraw in the next frame
+// });
 
 
 
 const colorPalette = document.getElementById("colorPalette");
-
 const lightnessPalette = document.getElementById("lightnessPalette");
-
-let baseColor = [1, 0, 0]; // Default red
+let baseColor = [0, 0, 0]; // Default red
 let lightnessFactor = 0.5; // Default 50%
 
 
@@ -103,62 +148,62 @@ function updateLightnessGradient() {
 }
 
 function pickBaseColor(event) {
-    const rect = colorPalette.getBoundingClientRect();
-    const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
-    const ratio = Math.max(0, Math.min(1, y / rect.height));
-
-    const colors = [
-        [255, 0, 0],
-        [255, 255, 0],
-        [0, 255, 0],
-        [0, 255, 255],
-        [0, 0, 255],
-        [255, 0, 255],
-        [255, 0, 0]
-    ];
-
-    const index = Math.floor(ratio * (colors.length - 1));
-    const nextIndex = Math.min(index + 1, colors.length - 1);
-    const mix = (ratio * (colors.length - 1)) % 1;
-
-    baseColor = [
-        (colors[index][0] * (1 - mix) + colors[nextIndex][0] * mix) / 255,
-        (colors[index][1] * (1 - mix) + colors[nextIndex][1] * mix) / 255,
-        (colors[index][2] * (1 - mix) + colors[nextIndex][2] * mix) / 255
-    ];
-
-    updateLightnessGradient(); // Update gradient dynamically with correct colors
-    updateFinalColor();
+  const rect = colorPalette.getBoundingClientRect();
+  const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+  const ratio = Math.max(0, Math.min(1, y / rect.height));
+  const colors = [
+    [255, 0, 0],
+    [255, 255, 0],
+    [0, 255, 0],
+    [0, 255, 255],
+    [0, 0, 255],
+    [255, 0, 255],
+    [255, 0, 0]
+  ];
+  const index = Math.floor(ratio * (colors.length - 1));
+  const nextIndex = Math.min(index + 1, colors.length - 1);
+  const mix = (ratio * (colors.length - 1)) % 1;
+  baseColor = [
+    (colors[index][0] * (1 - mix) + colors[nextIndex][0] * mix) / 255,
+    (colors[index][1] * (1 - mix) + colors[nextIndex][1] * mix) / 255,
+    (colors[index][2] * (1 - mix) + colors[nextIndex][2] * mix) / 255
+  ];
+  updateLightnessGradient();
+  updateFinalColor();
+  const indicator = colorPalette.querySelector('.indicator');
+  if (indicator) {
+    indicator.style.top = (ratio * (colorPalette.clientHeight - indicator.clientHeight)) + "px";
+  }
 }
-
 
 function pickLightness(event) {
-    const rect = lightnessPalette.getBoundingClientRect();
-    const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
-    lightnessFactor = Math.max(0, Math.min(1, y / rect.height));
-    updateFinalColor();
+  const rect = lightnessPalette.getBoundingClientRect();
+  const y = (event.touches ? event.touches[0].clientY : event.clientY) - rect.top;
+  const ratio = Math.max(0, Math.min(1, y / rect.height));
+  lightnessFactor = ratio;
+  updateFinalColor();
+  const indicator = lightnessPalette.querySelector('.indicator');
+  if (indicator) {
+    indicator.style.top = (ratio * (lightnessPalette.clientHeight - indicator.clientHeight)) + "px";
+  }
 }
+
+
+
 
 function updateFinalColor() {
     const r = Math.round(baseColor[0] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
     const g = Math.round(baseColor[1] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
     const b = Math.round(baseColor[2] * (1 - lightnessFactor) * 255 + lightnessFactor * 255);
-
     tintColor = [r / 255, g / 255, b / 255, 1];
-
     // Convert RGB to HEX
     const hexColor = rgbToHex(r, g, b);
-
     // Update the color picker's value
-
     console.log("hexColor", hexColor)
-
     document.getElementById("colorPicker").value = hexColor;
-
     //drawScene();
     needsRedraw = true;
 }
-
 
 
 // Convert HEX to RGBA (ensures correct format)
@@ -210,7 +255,6 @@ function hexToRGBA(hex) {
 }
 
 
-
 // Add event listeners for both desktop & mobile interactions
 ["mousedown", "touchstart"].forEach(event => {
     colorPalette.addEventListener(event, (e) => {
@@ -242,8 +286,6 @@ document.addEventListener("touchmove", function(event) {
         event.preventDefault();
     }
 }, { passive: false });
-
-
 
 
 //–––––––––––––––––––
@@ -280,13 +322,17 @@ function createProgram(gl, vertexSource, fragmentSource) {
 // SHADERS
 //–––––––––––––––––––
 
-// Vertex shader for full-screen quads and brush quads (positions in pixel space)
+
+
+
+// Vertex Shader for quads
 const quadVS = `
   attribute vec2 a_position;
   attribute vec2 a_texCoord;
   uniform vec2 u_resolution;
-  uniform float u_flipY; // set to 1.0 for no flip; -1.0 for normal flip
+  uniform float u_flipY;
   varying vec2 v_texCoord;
+
   void main() {
     vec2 zeroToOne = a_position / u_resolution;
     vec2 clipSpace = zeroToOne * 2.0 - 1.0;
@@ -295,65 +341,61 @@ const quadVS = `
   }
 `;
 
-// Fragment shader for drawing a texture (used for background and the paint layer)
+// Fragment Shader for rendering textures
 const quadFS = `
   precision mediump float;
   varying vec2 v_texCoord;
   uniform sampler2D u_texture;
+
   void main() {
     gl_FragColor = texture2D(u_texture, v_texCoord);
   }
 `;
 
-// Fragment shader for drawing a brush stroke to the paint layer.
-// Now uses u_tint to tint the painted stroke.
-// const paintFS = `
-//   precision mediump float;
-//   varying vec2 v_texCoord;
-//   uniform sampler2D u_brush;
-//   uniform vec4 u_tint;
-//   void main() {
-//     vec4 brushColor = texture2D(u_brush, v_texCoord);
-//     gl_FragColor = vec4(u_tint.rgb, brushColor.a);
-//   }
-// `;
-
+// Fragment Shader for painting (supports tinting & erasing)
 const paintFS = `
   precision mediump float;
   varying vec2 v_texCoord;
   uniform sampler2D u_brush;
   uniform vec4 u_tint;
-  uniform bool u_erase; // Toggle eraser mode
+  uniform bool u_erase;
 
   void main() {
     vec4 brushColor = texture2D(u_brush, v_texCoord);
-    if (u_erase) {
-      // When erasing, output a color whose alpha equals the brush alpha.
-      // With gl.blendFunc(gl.ZERO, gl.ONE_MINUS_SRC_ALPHA), this will
-      // reduce the underlying alpha (i.e. erase the stroke).
-      //gl_FragColor = vec4(0.0, 0.0, 0.0, brushColor.a);
-      gl_FragColor = vec4(0.0, 0.0, 0.0, brushColor.a);
-    } else {
-      // Normal painting: tint the brush with u_tint.
-      gl_FragColor = vec4(u_tint.rgb, brushColor.a);
-    }
+    gl_FragColor = u_erase ? vec4(0.0, 0.0, 0.0, brushColor.a) : vec4(u_tint.rgb, brushColor.a);
   }
 `;
 
-
-
-// Fragment shader for drawing the brush overlay (preview) tinted.
+// Fragment Shader for brush overlay (preview)
 const overlayFS = `
   precision mediump float;
   varying vec2 v_texCoord;
   uniform sampler2D u_brush;
   uniform vec4 u_tint;
+
   void main() {
     vec4 brushColor = texture2D(u_brush, v_texCoord);
     gl_FragColor = vec4(u_tint.rgb, brushColor.a);
   }
 `;
 
+// Fragment Shader for smudging effect
+const smudgeFS = `
+  precision mediump float;
+  varying vec2 v_texCoord;
+  uniform sampler2D u_paint;
+  uniform vec2 u_offset;
+
+  void main() {
+    vec4 color = texture2D(u_paint, v_texCoord);
+    vec4 smudgeColor = texture2D(u_paint, v_texCoord - u_offset);
+    gl_FragColor = mix(color, smudgeColor, 0.6);
+  }
+`;
+
+
+
+let smudgeProgram; // global variable
 
 
 
@@ -368,6 +410,7 @@ function initGL() {
     quadProgram = createProgram(gl, quadVS, quadFS);
     paintProgram = createProgram(gl, quadVS, paintFS);
     overlayProgram = createProgram(gl, quadVS, overlayFS);
+    smudgeProgram = createProgram(gl, quadVS, smudgeFS);    
 }
 
 // Create (or recreate) the persistent paint layer matching canvas size.
@@ -469,6 +512,8 @@ function createTextureFromImage(image, isOverlay = false) {
 //   img.onerror = () => console.error("Failed to load default image.");
 //   img.src = "images/image1.png";
 // }
+
+
 function initPaintLayerFixed() {
   if (paintTexture) { gl.deleteTexture(paintTexture); paintTexture = null; }
   if (paintFBO) { gl.deleteFramebuffer(paintFBO); paintFBO = null; }
@@ -646,193 +691,6 @@ function loadDefaultImage() {
 
   img.src = baseCanvas.toDataURL("image/png");
 }
-
-
-
-
-
-
-// function loadDefaultImage() {
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Fill with a paper-like base color
-//   ctx.fillStyle = "#faf0e6";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Create a noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     const noise = Math.floor(Math.random() * 60) - 30;
-//     noiseData.data[i] = 250 + noise;
-//     noiseData.data[i + 1] = 240 + noise;
-//     noiseData.data[i + 2] = 230 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.globalAlpha = 0.15;
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Vignette
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.3,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) * 0.5
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.25)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     const value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 20;
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-
-//   // Updated line here:
-//   img.src = baseCanvas.toDataURL("image/png");
-// }
-
-
-
-
-// function loadDefaultImage() {
-//   // Create a base canvas for paper texture
-//   const baseCanvas = document.createElement("canvas");
-//   baseCanvas.width = window.innerWidth;
-//   baseCanvas.height = window.innerHeight;
-//   const ctx = baseCanvas.getContext("2d");
-
-//   // Create a repeating noise pattern
-//   const noiseCanvas = document.createElement("canvas");
-//   noiseCanvas.width = 100;
-//   noiseCanvas.height = 100;
-//   const nctx = noiseCanvas.getContext("2d");
-//   const noiseData = nctx.createImageData(noiseCanvas.width, noiseCanvas.height);
-//   for (let i = 0; i < noiseData.data.length; i += 4) {
-//     let noise = Math.floor(Math.random() * 40);
-//     noiseData.data[i] = 200 + noise;
-//     noiseData.data[i + 1] = 200 + noise;
-//     noiseData.data[i + 2] = 200 + noise;
-//     noiseData.data[i + 3] = 255;
-//   }
-//   nctx.putImageData(noiseData, 0, 0);
-//   const noisePattern = ctx.createPattern(noiseCanvas, "repeat");
-//   ctx.fillStyle = noisePattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Overlay a semi-transparent white layer
-//   ctx.fillStyle = "rgba(255,255,255,0.9)";
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add vignette gradient in the corners
-//   const vignetteGradient = ctx.createRadialGradient(
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.min(baseCanvas.width, baseCanvas.height) * 0.35,
-//     baseCanvas.width / 2,
-//     baseCanvas.height / 2,
-//     Math.max(baseCanvas.width, baseCanvas.height) / 2
-//   );
-//   vignetteGradient.addColorStop(0, "rgba(0,0,0,0)");
-//   vignetteGradient.addColorStop(1, "rgba(0,0,0,0.3)");
-//   ctx.fillStyle = vignetteGradient;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-
-//   // Add a crisp noise overlay
-//   const crispCanvas = document.createElement("canvas");
-//   crispCanvas.width = 200;
-//   crispCanvas.height = 200;
-//   const cctx = crispCanvas.getContext("2d");
-//   const crispData = cctx.createImageData(crispCanvas.width, crispCanvas.height);
-//   for (let i = 0; i < crispData.data.length; i += 4) {
-//     let value = Math.floor(Math.random() * 256);
-//     crispData.data[i] = value;
-//     crispData.data[i + 1] = value;
-//     crispData.data[i + 2] = value;
-//     crispData.data[i + 3] = 30; // subtle noise
-//   }
-//   cctx.putImageData(crispData, 0, 0);
-//   const crispPattern = ctx.createPattern(crispCanvas, "repeat");
-//   ctx.globalAlpha = 0.1;
-//   ctx.fillStyle = crispPattern;
-//   ctx.fillRect(0, 0, baseCanvas.width, baseCanvas.height);
-//   ctx.globalAlpha = 1.0;
-
-//   // Use the generated canvas as the source image
-//   const img = new Image();
-//   img.crossOrigin = "anonymous";
-//   img.onload = () => {
-//     currentImage = img;
-//     fixedFBOWidth = img.width;
-//     fixedFBOHeight = img.height;
-//     initPaintLayerFixed();
-//     updateCanvasSize(img);
-//     createTextureFromImage(img);
-//   };
-//   img.onerror = () => console.error("Failed to load default image.");
-//   img.src = baseCanvas.toDataURL();
-// }
-
-
-
-// function loadDefaultImage() {
-
-//     const img = new Image();
-//     img.crossOrigin = "anonymous";
-//     img.onload = () => {
-//         currentImage = img;
-//         // Set the fixed resolution to the image's dimensions.
-//         fixedFBOWidth = img.width;
-//         fixedFBOHeight = img.height;
-//         // Initialize the persistent paint layer with fixed dimensions.
-//         initPaintLayerFixed();
-//         // Update the canvas size (this scales the view but the FBO remains at the image's size).
-//         updateCanvasSize(img);
-//         createTextureFromImage(img);
-//     };
-//     img.onerror = () => console.error("Failed to load default image.");
-//     img.src = "images/helena-blank.webp";
-// }
 
 
 function loadBrushes() {
@@ -1584,28 +1442,29 @@ canvas.addEventListener("touchstart", (event) => {
 // BRUSH SWITCHING (keys 1,2,3 …)
 //–––––––––––––––––––
 document.addEventListener("keydown", (event) => {
-    let shouldRedraw = false; // Track if we need to redraw
-
-    if (event.key === "[") {
-        brushSize = Math.max(0.01, brushSize - 0.02);
-        shouldRedraw = true;
-    } else if (event.key === "]") {
-        brushSize = Math.min(1.0, brushSize + 0.02);
-        shouldRedraw = true;
-    } else if (!isNaN(event.key)) {
-        let index = parseInt(event.key) - 1;
-        if (index >= 0 && index < brushTextures.length) {
-            currentBrushIndex = index;
-            overlayTexture = brushTextures[index];
-            brushAspect = brushAspects[index];
-            shouldRedraw = true;
-        }
+  let shouldRedraw = false;
+  if (event.key === "[") {
+    brushSize = Math.max(0.01, brushSize - 0.02);
+    brushSizeSlider.value = brushSize;
+    shouldRedraw = true;
+  } else if (event.key === "]") {
+    brushSize = Math.min(1.0, brushSize + 0.02);
+    brushSizeSlider.value = brushSize;
+    shouldRedraw = true;
+  } else if (!isNaN(event.key)) {
+    let index = parseInt(event.key) - 1;
+    if (index >= 0 && index < brushTextures.length) {
+      currentBrushIndex = index;
+      overlayTexture = brushTextures[index];
+      brushAspect = brushAspects[index];
+      shouldRedraw = true;
     }
-
-    if (shouldRedraw) {
-        needsRedraw = true;
-    }
+  }
+  if (shouldRedraw) {
+    needsRedraw = true;
+  }
 });
+
 
 
 const brushSizeSlider = document.getElementById("brushSizeSlider");
@@ -2027,55 +1886,92 @@ function drawSingleBrushStamp(fx, fy) {
 // }
 
 
+
+
+
+
 function drawBrushStrokeToPaintLayer(x, y) {
-    // Save current stroke state for undo/redo
     saveStrokeState();
 
-    // Convert canvas coordinates (x, y) to fixed-FBO space.
     const scaleX = fixedFBOWidth / canvas.width;
     const scaleY = fixedFBOHeight / canvas.height;
     const fx = x * scaleX;
     const fy = y * scaleY;
 
-    // Update dynamic rotation based on canvas movement.
-    if (lastX !== null && lastY !== null) {
-        const dx = x - lastX;
-        const dy = y - lastY;
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            currentAngle = Math.atan2(dy, dx);
+    if (smudgeMode) {
+        if (lastSmudgeX === null || lastSmudgeY === null) {
+            lastSmudgeX = fx;
+            lastSmudgeY = fy;
         }
-    }
-    lastX = x;
-    lastY = y;
-
-    // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
-    if (lineMode && lastFx !== null && lastFy !== null) {
-        const dxFixed = fx - lastFx;
-        const dyFixed = fy - lastFy;
-        const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
-        const brushW = brushSize * fixedFBOWidth;
-        const stepSize = brushW * lineStepFactor;
-        const steps = Math.max(1, Math.floor(dist / stepSize));
-        for (let i = 0; i <= steps; i++) {
-            const interpX = lastFx + (dxFixed * i) / steps;
-            const interpY = lastFy + (dyFixed * i) / steps;
-            drawSingleBrushStamp(interpX, interpY);
-        }
+        const offset = {
+            x: ((fx - lastSmudgeX) / fixedFBOWidth) * 2.0,
+            y: ((fy - lastSmudgeY) / fixedFBOHeight) * 2.0
+        };
+        applySmudgePass(offset);
+        lastSmudgeX = fx;
+        lastSmudgeY = fy;
     } else {
         drawSingleBrushStamp(fx, fy);
     }
 
-    // Update the last fixed-space coordinates.
-    lastFx = fx;
-    lastFy = fy;
-
-    strokeCount++;
-    if (strokeCount >= FLATTEN_THRESHOLD) {
-        flattenStrokes();
-    }
-    // Mark the scene to be redrawn (the render loop will pick it up)
     needsRedraw = true;
 }
+
+
+
+
+
+
+
+// function drawBrushStrokeToPaintLayer(x, y) {
+//     // Save current stroke state for undo/redo
+//     saveStrokeState();
+
+//     // Convert canvas coordinates (x, y) to fixed-FBO space.
+//     const scaleX = fixedFBOWidth / canvas.width;
+//     const scaleY = fixedFBOHeight / canvas.height;
+//     const fx = x * scaleX;
+//     const fy = y * scaleY;
+
+//     // Update dynamic rotation based on canvas movement.
+//     if (lastX !== null && lastY !== null) {
+//         const dx = x - lastX;
+//         const dy = y - lastY;
+//         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//             currentAngle = Math.atan2(dy, dx);
+//         }
+//     }
+//     lastX = x;
+//     lastY = y;
+
+//     // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
+//     if (lineMode && lastFx !== null && lastFy !== null) {
+//         const dxFixed = fx - lastFx;
+//         const dyFixed = fy - lastFy;
+//         const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+//         const brushW = brushSize * fixedFBOWidth;
+//         const stepSize = brushW * lineStepFactor;
+//         const steps = Math.max(1, Math.floor(dist / stepSize));
+//         for (let i = 0; i <= steps; i++) {
+//             const interpX = lastFx + (dxFixed * i) / steps;
+//             const interpY = lastFy + (dyFixed * i) / steps;
+//             drawSingleBrushStamp(interpX, interpY);
+//         }
+//     } else {
+//         drawSingleBrushStamp(fx, fy);
+//     }
+
+//     // Update the last fixed-space coordinates.
+//     lastFx = fx;
+//     lastFy = fy;
+
+//     strokeCount++;
+//     if (strokeCount >= FLATTEN_THRESHOLD) {
+//         flattenStrokes();
+//     }
+//     // Mark the scene to be redrawn (the render loop will pick it up)
+//     needsRedraw = true;
+// }
 
 
 
@@ -2227,46 +2123,486 @@ function drawScene() {
 }
 
 
+
+
+
+
+
+//--------
+// Smudge
+// 
+
+function drawFullscreenQuad() {
+  const vertices = new Float32Array([
+    0, 0, 0, 0,
+    fixedFBOWidth, 0, 1, 0,
+    0, fixedFBOHeight, 0, 1,
+    0, fixedFBOHeight, 0, 1,
+    fixedFBOWidth, 0, 1, 0,
+    fixedFBOWidth, fixedFBOHeight, 1, 1
+  ]);
+  
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STATIC_DRAW);
+  
+  // Use the currently active program
+  const posLoc = gl.getAttribLocation(gl.getParameter(gl.CURRENT_PROGRAM), "a_position");
+  const texLoc = gl.getAttribLocation(gl.getParameter(gl.CURRENT_PROGRAM), "a_texCoord");
+  
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+  gl.enableVertexAttribArray(texLoc);
+  gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+  
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  
+  gl.disableVertexAttribArray(posLoc);
+  gl.disableVertexAttribArray(texLoc);
+  gl.bindBuffer(gl.ARRAY_BUFFER, null);
+  gl.deleteBuffer(buffer);
+}
+
+
+
+function applySmudgePass(offset) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+    gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    gl.useProgram(smudgeProgram);
+
+    // Pass smudge offset
+    const offsetLoc = gl.getUniformLocation(smudgeProgram, "u_offset");
+    gl.uniform2f(offsetLoc, offset.x, offset.y);
+
+    // Bind paint texture
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, paintTexture);
+    const paintLoc = gl.getUniformLocation(smudgeProgram, "u_paint");
+    gl.uniform1i(paintLoc, 0);
+
+    drawFullscreenQuad(); // Ensure quad is drawn
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+
+
+
+
+let smudgeMode = false;
+let lastSmudgeX = null, lastSmudgeY = null;
+
+
+
+function drawSmudgeStroke(fx, fy, offset) {
+
+  console.log("drawSmudgeStroke",fx,fy, offset)
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+  gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+  gl.enable(gl.BLEND);
+  gl.useProgram(smudgeProgram);
+
+  const offsetLoc = gl.getUniformLocation(smudgeProgram, "u_offset");
+  gl.uniform2f(offsetLoc, offset.x, offset.y);
+
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, paintTexture);
+  const paintLoc = gl.getUniformLocation(smudgeProgram, "u_paint");
+  gl.uniform1i(paintLoc, 0);
+
+  const brushW = brushSize * fixedFBOWidth;
+  const brushH = brushW / brushAspect;
+  const halfW = brushW / 2;
+  const halfH = brushH / 2;
+  
+  const cosA = Math.cos(currentAngle);
+  const sinA = Math.sin(currentAngle);
+  const offsets = [
+    { x: -halfW, y: -halfH },
+    { x: halfW, y: -halfH },
+    { x: -halfW, y: halfH },
+    { x: halfW, y: halfH }
+  ];
+  const rotated = offsets.map(off => ({
+    x: off.x * cosA - off.y * sinA,
+    y: off.x * sinA + off.y * cosA
+  }));
+  const v0 = { x: fx + rotated[0].x, y: fy + rotated[0].y };
+  const v1 = { x: fx + rotated[1].x, y: fy + rotated[1].y };
+  const v2 = { x: fx + rotated[2].x, y: fy + rotated[2].y };
+  const v3 = { x: fx + rotated[3].x, y: fy + rotated[3].y };
+  
+  const vertices = new Float32Array([
+    v0.x, v0.y, 0, 0,
+    v1.x, v1.y, 1, 0,
+    v2.x, v2.y, 0, 1,
+    v2.x, v2.y, 0, 1,
+    v1.x, v1.y, 1, 0,
+    v3.x, v3.y, 1, 1
+  ]);
+  
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
+  
+  const posLoc = gl.getAttribLocation(smudgeProgram, "a_position");
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+  const texLoc = gl.getAttribLocation(smudgeProgram, "a_texCoord");
+  gl.enableVertexAttribArray(texLoc);
+  gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+  
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
+  gl.deleteBuffer(buffer);
+  gl.disableVertexAttribArray(posLoc);
+  gl.disableVertexAttribArray(texLoc);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+}
+
+
+
+document.addEventListener("keydown", (event) => {
+  if (event.key.toLowerCase() === "m") {
+    smudgeMode = !smudgeMode;
+    // When switching modes, reset the smudge coordinates.
+    lastSmudgeX = null;
+    lastSmudgeY = null;
+    console.log("Smudge mode:", smudgeMode);
+  }
+});
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+//–––––––––––––––––––
+// FILE LOADER (for background image)
+//–––––––––––––––––––
+
+// Add a downscale function that creates a JPEG data URL from a larger image
+function downscaleImage(image, maxWidth, maxHeight) {
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+  if (scale < 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(image.width * scale);
+    canvas.height = Math.floor(image.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    // Use JPEG with quality 0.7 to reduce memory usage
+    return canvas.toDataURL("image/jpeg", 0.7);
+  }
+  return null;
+}
+
+
+/**
+ * Downscale an image to fit within the window dimensions.
+ * Returns a data URL (JPEG) if downscaling is performed,
+ * or null if the image is already within the desired size.
+ */
+function downscaleImageToWindow(image) {
+  const maxWidth = window.innerWidth;
+  const maxHeight = window.innerHeight;
+  // Calculate the scale factor, ensuring it does not exceed 1.
+  const scale = Math.min(maxWidth / image.width, maxHeight / image.height, 1);
+  
+  if (scale < 1) {
+    const canvas = document.createElement("canvas");
+    canvas.width = Math.floor(image.width * scale);
+    canvas.height = Math.floor(image.height * scale);
+    const ctx = canvas.getContext("2d");
+    ctx.drawImage(image, 0, 0, canvas.width, canvas.height);
+    // Return the JPEG data URL with a quality setting of 0.7.
+    return canvas.toDataURL("image/jpeg", 0.7);
+  }
+  
+  return null; // No downscaling needed
+}
+
+//–––––––––––––––––––
+// FILE LOADER (for background image)
+//–––––––––––––––––––
+
 //–––––––––––––––––––
 // FILE LOADER (for background image)
 //–––––––––––––––––––
 imageLoader.addEventListener("change", (event) => {
-    const file = event.target.files[0];
-    if (file) {
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const img = new Image();
-            img.onload = () => {
+  console.log("[DEBUG] imageLoader change event fired:", event);
+  const file = event.target.files[0];
+  if (file) {
+    console.log("[DEBUG] Selected file:", file.name, file.type, file.size);
+    const reader = new FileReader();
 
-                currentImage = img;
+    reader.onerror = (err) => {
+      console.error("[DEBUG] FileReader error:", err);
+    };
 
-              fixedFBOWidth = img.width;
-              fixedFBOHeight = img.height;
+reader.onload = (e) => {
+  console.log("[DEBUG] FileReader onload triggered. Data length:", e.target.result.length);
+  const img = new Image();
 
+  img.onerror = (err) => {
+    console.error("[DEBUG] Image load error:", err);
+  };
+
+  img.onload = () => {
+    console.log("[DEBUG] Image loaded successfully. Dimensions:", img.width, img.height);
+    
+    // Downscale the image if it's larger than the window
+    const downscaledDataUrl = downscaleImageToWindow(img);
+    if (downscaledDataUrl) {
+      console.log("[DEBUG] Downscaled image to window dimensions.");
+      img.src = downscaledDataUrl;
+      // Once the downscaled image is loaded, use it:
+      img.onload = () => {
+        console.log("[DEBUG] Downscaled image loaded. Dimensions:", img.width, img.height);
+        currentImage = img;
+        fixedFBOWidth = img.width;
+        fixedFBOHeight = img.height;
+        console.log("[DEBUG] Calling initPaintLayerFixed()");
         initPaintLayerFixed();
-
-
-                updateCanvasSize(img);
-                createTextureFromImage(img);
-
-            };
-            img.onerror = () => console.error("Failed to load selected image.");
-            img.src = e.target.result;
-        };
-        reader.onerror = () => console.error("Failed to read file.");
-        reader.readAsDataURL(file);
+        console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+        updateCanvasSize(currentImage);
+        console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+        createTextureFromImage(currentImage);
+      };
+    } else {
+      console.log("[DEBUG] No downscaling needed.");
+      currentImage = img;
+      fixedFBOWidth = img.width;
+      fixedFBOHeight = img.height;
+      console.log("[DEBUG] Calling initPaintLayerFixed()");
+      initPaintLayerFixed();
+      console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+      updateCanvasSize(currentImage);
+      console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+      createTextureFromImage(currentImage);
     }
+  };
+
+  console.log("[DEBUG] Setting image src to FileReader result");
+  img.src = e.target.result;
+};
+
+
+    try {
+      reader.readAsDataURL(file);
+      console.log("[DEBUG] FileReader readAsDataURL called successfully");
+    } catch (ex) {
+      console.error("[DEBUG] Exception while reading file:", ex);
+    }
+  } else {
+    console.warn("[DEBUG] No file selected.");
+  }
 });
 
+// Trigger the file input when clicking or touching the button
 const imageLoaderButton = document.getElementById("imageLoaderButton");
 imageLoaderButton.addEventListener("click", () => {
+  console.log("[DEBUG] imageLoaderButton clicked.");
   document.getElementById("imageLoader").click();
 });
 imageLoaderButton.addEventListener("touchend", () => {
+  console.log("[DEBUG] imageLoaderButton touchend triggered.");
   document.getElementById("imageLoader").click();
 });
 
+// On iOS, remove the 'capture' attribute so users can choose from gallery or camera
+if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+  console.log("[DEBUG] Detected iOS device – removing capture attribute");
+  imageLoader.removeAttribute("capture");
+}
 
+
+
+// imageLoader.addEventListener("change", (event) => {
+//   console.log("[DEBUG] imageLoader change event fired:", event);
+//   const file = event.target.files[0];
+//   if (file) {
+//     console.log("[DEBUG] Selected file:", file.name, file.type, file.size);
+//     const reader = new FileReader();
+
+//     reader.onerror = (err) => {
+//       console.error("[DEBUG] FileReader error:", err);
+//     };
+
+//     reader.onload = (e) => {
+//       console.log("[DEBUG] FileReader onload triggered. Data length:", e.target.result.length);
+//       const img = new Image();
+
+//       img.onerror = (err) => {
+//         console.error("[DEBUG] Image load error:", err);
+//       };
+
+//       img.onload = () => {
+//         console.log("[DEBUG] Image loaded successfully. Dimensions:", img.width, img.height);
+//         // Downscale if necessary
+//         const maxWidth = 1024;
+//         const maxHeight = 1024;
+//         const downscaledDataUrl = downscaleImage(img, maxWidth, maxHeight);
+//         if (downscaledDataUrl) {
+//           console.log("[DEBUG] Downscaling image to max dimensions:", maxWidth, maxHeight);
+//           const downscaledImg = new Image();
+//           downscaledImg.onerror = (err) => {
+//             console.error("[DEBUG] Downscaled image load error:", err);
+//           };
+//           downscaledImg.onload = () => {
+//             console.log("[DEBUG] Downscaled image loaded successfully. Dimensions:", downscaledImg.width, downscaledImg.height);
+//             currentImage = downscaledImg;
+//             fixedFBOWidth = downscaledImg.width;
+//             fixedFBOHeight = downscaledImg.height;
+//             console.log("[DEBUG] Calling initPaintLayerFixed()");
+//             initPaintLayerFixed();
+//             console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+//             updateCanvasSize(currentImage);
+//             console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+//             createTextureFromImage(currentImage);
+//           };
+//           downscaledImg.src = downscaledDataUrl;
+//         } else {
+//           console.log("[DEBUG] No downscaling needed");
+//           currentImage = img;
+//           fixedFBOWidth = img.width;
+//           fixedFBOHeight = img.height;
+//           console.log("[DEBUG] Calling initPaintLayerFixed()");
+//           initPaintLayerFixed();
+//           console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+//           updateCanvasSize(currentImage);
+//           console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+//           createTextureFromImage(currentImage);
+//         }
+//       };
+
+//       console.log("[DEBUG] Setting image src to FileReader result");
+//       img.src = e.target.result;
+//     };
+
+//     try {
+//       reader.readAsDataURL(file);
+//       console.log("[DEBUG] FileReader readAsDataURL called successfully");
+//     } catch (ex) {
+//       console.error("[DEBUG] Exception while reading file:", ex);
+//     }
+//   } else {
+//     console.warn("[DEBUG] No file selected.");
+//   }
+// });
+
+// // Trigger the file input when clicking/touching the button
+// const imageLoaderButton = document.getElementById("imageLoaderButton");
+// imageLoaderButton.addEventListener("click", () => {
+//   document.getElementById("imageLoader").click();
+// });
+// imageLoaderButton.addEventListener("touchend", () => {
+//   document.getElementById("imageLoader").click();
+// });
+
+// // On iOS, remove the 'capture' attribute so users can choose from gallery or camera
+// if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+//   imageLoader.removeAttribute("capture");
+// }
+
+
+
+
+//  imageLoader.addEventListener("change", (event) => {
+//     console.log("[DEBUG] imageLoader change event fired:", event);
+//     const file = event.target.files[0];
+//     if (file) {
+//       console.log("[DEBUG] Selected file:", file.name, file.type, file.size);
+//       const reader = new FileReader();
+      
+//       reader.onerror = (err) => {
+//         console.error("[DEBUG] FileReader error:", err);
+//       };
+      
+//       reader.onload = (e) => {
+//         console.log("[DEBUG] FileReader onload triggered. Data length:", e.target.result.length);
+//         const img = new Image();
+        
+//         img.onerror = (err) => {
+//           console.error("[DEBUG] Image load error:", err);
+//         };
+        
+//         img.onload = () => {
+//           console.log("[DEBUG] Image loaded successfully. Dimensions:", img.width, img.height);
+//           currentImage = img;
+//           fixedFBOWidth = img.width;
+//           fixedFBOHeight = img.height;
+//           console.log("[DEBUG] Calling initPaintLayerFixed()");
+//           initPaintLayerFixed();
+//           console.log("[DEBUG] Calling updateCanvasSize(img)");
+//           updateCanvasSize(img);
+//           console.log("[DEBUG] Calling createTextureFromImage(img)");
+//           createTextureFromImage(img);
+//         };
+        
+//         console.log("[DEBUG] Setting image src to FileReader result");
+//         img.src = e.target.result;
+//       };
+      
+//       try {
+//         reader.readAsDataURL(file);
+//         console.log("[DEBUG] FileReader readAsDataURL called successfully");
+//       } catch (ex) {
+//         console.error("[DEBUG] Exception while reading file:", ex);
+//       }
+//     } else {
+//       console.warn("[DEBUG] No file selected.");
+//     }
+//   });
+
+// // imageLoader.addEventListener("change", (event) => {
+// //     const file = event.target.files[0];
+// //     if (file) {
+// //         const reader = new FileReader();
+// //         reader.onload = (e) => {
+// //             const img = new Image();
+// //             img.onload = () => {
+
+// //                 currentImage = img;
+
+// //               fixedFBOWidth = img.width;
+// //               fixedFBOHeight = img.height;
+
+// //         initPaintLayerFixed();
+
+
+// //                 updateCanvasSize(img);
+// //                 createTextureFromImage(img);
+
+// //             };
+// //             img.onerror = () => console.error("Failed to load selected image.");
+// //             img.src = e.target.result;
+// //         };
+// //         reader.onerror = () => console.error("Failed to read file.");
+// //         reader.readAsDataURL(file);
+// //     }
+// // });
+
+// const imageLoaderButton = document.getElementById("imageLoaderButton");
+// imageLoaderButton.addEventListener("click", () => {
+//   document.getElementById("imageLoader").click();
+// });
+// imageLoaderButton.addEventListener("touchend", () => {
+//   document.getElementById("imageLoader").click();
+// });
+
+
+// if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream) {
+//   imageLoader.removeAttribute("capture");
+// }
 
 
 
@@ -2782,8 +3118,8 @@ document.getElementById("shareButton").addEventListener("click", shareCurrentArt
 
         setTimeout(() => {
             messageBubble.classList.add("fade-out");
-            setTimeout(() => messageBubble.remove(), 500);
-        }, 3000);
+            setTimeout(() => messageBubble.remove(), 700);
+        }, 700);
     }
 
 
@@ -2863,7 +3199,7 @@ document.getElementById("shareButton").addEventListener("click", shareCurrentArt
 
     // Modal handling
     function showModal(modal) {
-        modal.style.display = "block";
+        modal.style.display = "flex";
 
         // Ensure event listeners are only added once
         setTimeout(() => {
@@ -2941,36 +3277,8 @@ function clearCanvas() {
 // Event listener for the Clean button
 document.getElementById("cleanButton").addEventListener("click", clearCanvas);
 
-
-// Vaanishing UI
-// const uiElements = [
-//   { id: "brushContainer", display: "block" },
-//   { id: "brushSizeSliderContainer", display: "block" },
-//   { id: "redoUndoButtons", display: "flex" },
-//   { id: "colorsContainer", display: "block" },
-//   { id: "saveGalleryButtons", display: "block" }
-// ];
-
-// const hideUI = () =>
-//   uiElements.forEach(item => {
-//     const el = document.getElementById(item.id);
-//     if (el) el.style.display = "none";
-//   });
-
-// const showUI = () =>
-//   uiElements.forEach(item => {
-//     const el = document.getElementById(item.id);
-//     if (el) el.style.display = item.display;
-//   });
-
-// canvas.addEventListener("mousedown", hideUI);
-// canvas.addEventListener("touchstart", hideUI);
-// canvas.addEventListener("mouseup", () => setTimeout(showUI, 1000));
-// canvas.addEventListener("touchend", () => setTimeout(showUI, 1000));
-
-
 const uiElements = [
-  { id: "brushContainer", display: "block" },
+  { id: "brushContainer", display: "flex" },
   { id: "brushSizeSliderContainer", display: "block" },
   { id: "redoUndoButtons", display: "flex" },
   { id: "colorsContainer", display: "block" },
@@ -3012,6 +3320,12 @@ canvas.addEventListener("touchend", resetUITimeout);
 canvas.addEventListener("mouseleave", resetUITimeout);
 window.addEventListener("blur", resetUITimeout);
 window.addEventListener("focus", showUI);
+
+
+
+
+document.getElementById("footer").innerHTML = document.title;
+
 
 
 
