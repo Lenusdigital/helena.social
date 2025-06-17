@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>L3ns W3bsit3 X3</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+
+    <script>
+
+
+        // ===== Image Display & Interaction =====
+        function changeImage(src) {
+            document.getElementById('mainImage').src = src.replace('100', '500');
+            const audio = document.getElementById('clickSound');
+            if (audio) audio.play();
+        }
+
+        // ===== Admin Modal Handling =====
+        function showAdminModal() {
+            document.getElementById('adminModal').style.display = 'flex';
+        }
+
+        function hideAdminModal() {
+            document.getElementById('adminModal').style.display = 'none';
+        }
+
+        function validatePIN() {
+            const input = document.getElementById('pinInput').value;
+            const correctPIN = '7483';  // Must match server-side value
+            if (input === correctPIN) {
+                document.getElementById('uploadForm').style.display = 'block';
+                document.getElementById('deleteForm').style.display = 'block';
+                hideAdminModal();
+            } else {
+                alert('Incorrect PIN');
+            }
+        }
+
+        // ===== Upload Preview Modal =====
+        function previewImage(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('previewModal').style.display = 'flex';
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function submitUpload() {
+            document.getElementById('previewModal').style.display = 'none';
+            document.getElementById('uploadForm').submit();
+        }
+
+        function cancelUpload() {
+            document.getElementById('previewModal').style.display = 'none';
+            document.getElementById('imageInput').value = ''; // clear file input
+        }
+
+        function triggerUploadClick() {
+            document.getElementById('imageInput').click();
+        }        
+
+        // ===== Delete Confirmation Modal =====
+        let selectedToDelete = null;
+
+        function triggerDeleteModal(event) {
+            event.preventDefault();
+            selectedToDelete = document.getElementById('deleteForm');
+
+            const mainImage = document.getElementById('mainImage');
+            const mainSrc = mainImage.src.split('/').pop(); // extract filename
+
+            const select = document.querySelector('select[name="filename"]');
+            select.value = mainSrc; // set the dropdown to current image
+
+            document.getElementById('deletePreviewName').innerText = mainSrc;
+            document.getElementById('deletePreviewImg').src = '/static/images/gallery1/' + mainSrc;
+            document.getElementById('deleteModal').style.display = 'flex';
+        }
+
+
+
+
+        function confirmDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+            if (selectedToDelete) selectedToDelete.submit();
+        }
+
+        function cancelDeleteModal() {
+            document.getElementById('deleteModal').style.display = 'none';
+        }
+
+        let imageList = [{% for image in images %}"{{ url_for('static', filename='images/gallery1/' + image) }}",{% endfor %}];
+        let currentIndex = 0;
+
+        function updateMainImage() {
+            const mainImage = document.getElementById('mainImage');
+            mainImage.src = imageList[currentIndex];
+        }
+
+        function showPrevImage() {
+            currentIndex = (currentIndex - 1 + imageList.length) % imageList.length;
+            updateMainImage();
+        }
+
+        function showNextImage() {
+            currentIndex = (currentIndex + 1) % imageList.length;
+            updateMainImage();
+        }
+                
+            
+
+    </script>
+
+</head>
+<body>
+    <header>
+        <h1 class='babypinkfont'>Howdy!! gurt: hello</h1>
+        <nav>
+            <a href="#">Home</a>
+            <a href="#">About</a>
+            <a href="#">Contact</a>
+        </nav>
+    </header>
+
+    <section>
+        <h2 class='babypinkfont'>About Us</h2>
+        <p class='babypinkfont'>This is a sample website created to demonstrate basic HTML structure.</p>
+
+        {% if logged_in %}
+
+
+        <form id="uploadForm" action="/upload" method="post" enctype="multipart/form-data" style="text-align:center; display:none;">
+            <input id="imageInput" type="file" name="image" accept="image/*" required onchange="previewImage(event)">
+        </form>
+
+        <label id="customUploadBtn" for="imageInput"></label>
+        <input id="imageInput" type="file" name="image" accept="image/*" required onchange="previewImage(event)" style="display:none;">
+
+
+
+        <!-- Preview Modal -->
+        <div id="previewModal" class="modal" style="display:none; align-items: center; justify-content: center;">
+            <div class="modal-content" style="text-align: center;">
+                <h2>Preview Image</h2>
+                <img id="previewImg" src="" style="max-width: 100%; max-height: 300px; margin-bottom: 1em;">
+                <div>
+                    <button onclick="submitUpload()">OK</button>
+                    <button onclick="cancelUpload()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
+
+        <form id="deleteForm" action="/delete" method="post" style="text-align:center; margin-top: 1em;" onsubmit="triggerDeleteModal(event)">
+            <select name="filename" required>
+                {% for image in images %}
+                <option value="{{ image }}">{{ image }}</option>
+                {% endfor %}
+            </select>
+
+            <button id="customDeleteBtn" type="submit"></button>
+
+        </form>
+
+
+
+        {% endif %}
+
+
+        <div class="main-image-container">
+            <button id="prevBtn" class="nav-btn" onclick="showPrevImage()"></button>
+            <img id="mainImage" class="main-image" src="{{ url_for('static', filename='images/gallery1/' + images[0]) if images else '' }}" alt="Main Image">
+            <button id="nextBtn" class="nav-btn" onclick="showNextImage()"></button>
+        </div>
+
+
+        <div class="gallery">
+            {% for image in images %}
+            <img src="{{ url_for('static', filename='images/gallery1/' + image) }}" alt="Thumbnail" onclick="changeImage(this.src)">
+            {% endfor %}
+        </div>
+    </section>
+
+    <footer>
+        <p>&copy; 2045 My Website !! ^_^</p>
+    </footer>
+
+
+    <div id="adminIcon" onclick="showAdminModal()">
+        {{ '[Logout]' if logged_in else '🔒 Admin' }}
+    </div>
+
+    <div id="adminModal" class="modal">
+        <div class="modal-content">
+            {% if logged_in %}
+            <h2>Log out?</h2>
+            <form action="/logout" method="post">
+                <button type="submit" style="font-size: 1.5em;">Log out</button>
+                <button type="button" onclick="hideAdminModal()" style="font-size: 1.5em;">Cancel</button>
+            </form>
+            {% else %}
+            <h2>Enter Admin PIN</h2>
+            <form action="/login" method="post">
+                <input name="pin" type="password" style="font-size: 2em; padding: 0.5em;" required>
+                <div style="margin-top: 1em;">
+                    <button type="submit" style="font-size: 1.5em;">Submit</button>
+                    <button type="button" onclick="hideAdminModal()" style="font-size: 1.5em;">Cancel</button>
+                </div>
+            </form>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="deleteModal" class="modal">
+        <div class="modal-content" style="text-align: center;">
+            <h2>Delete Image?</h2>
+            <p>Are you sure you want to delete:</p>
+            <p><strong id="deletePreviewName"></strong></p>
+            <img id="deletePreviewImg" src="" style="max-width: 100%; max-height: 300px; margin: 1em 0;" alt="Image Preview">
+
+            <div>
+                <button onclick="confirmDeleteModal()">OK</button>
+                <button onclick="cancelDeleteModal()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
+
+
+    <audio id="clickSound" src="{{ url_for('static', filename='sounds/click2.m4a') }}" preload="auto"></audio>
+</body>
+</html>
