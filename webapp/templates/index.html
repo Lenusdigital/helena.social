@@ -6,115 +6,181 @@
     <title>L3ns W3bsit3 X3</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
 
-    <script>
+
+<script>
 
 
-        // ===== Image Display & Interaction =====
-        function changeImage(src) {
-            document.getElementById('mainImage').src = src.replace('100', '500');
-            const audio = document.getElementById('clickSound');
-            if (audio) audio.play();
+(function() {
+
+
+    function changeImage(src) {
+        document.getElementById('mainImage').src = src.replace('100', '500');
+        const audio = document.getElementById('clickSound');
+        if (audio) audio.play();
+    }
+
+    function showAdminModal() {
+        document.getElementById('adminModal').style.display = 'flex';
+    }
+
+    function hideAdminModal() {
+        document.getElementById('adminModal').style.display = 'none';
+    }
+
+    function validatePIN() {
+        const input = document.getElementById('pinInput').value;
+        const correctPIN = '7483';
+        if (input === correctPIN) {
+            document.getElementById('uploadForm').style.display = 'block';
+            document.getElementById('deleteForm').style.display = 'block';
+            hideAdminModal();
+        } else {
+            alert('Incorrect PIN');
         }
+    }
 
-        // ===== Admin Modal Handling =====
-        function showAdminModal() {
-            document.getElementById('adminModal').style.display = 'flex';
-        }
+    function previewImage(event) {
+        const file = event.target.files[0];
+        if (!file) return;
 
-        function hideAdminModal() {
-            document.getElementById('adminModal').style.display = 'none';
-        }
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            document.getElementById('previewImg').src = e.target.result;
+            document.getElementById('previewModal').style.display = 'flex';
+        };
+        reader.readAsDataURL(file);
+    }
 
-        function validatePIN() {
-            const input = document.getElementById('pinInput').value;
-            const correctPIN = '7483';  // Must match server-side value
-            if (input === correctPIN) {
-                document.getElementById('uploadForm').style.display = 'block';
-                document.getElementById('deleteForm').style.display = 'block';
-                hideAdminModal();
-            } else {
-                alert('Incorrect PIN');
+
+    function submitUpload() {
+        document.getElementById('previewModal').style.display = 'none';
+
+        const form = document.getElementById('uploadForm');
+        const formData = new FormData(form);
+
+        const xhr = new XMLHttpRequest();
+
+        xhr.upload.addEventListener('progress', function(e) {
+            if (e.lengthComputable) {
+                const percent = (e.loaded / e.total) * 100;
+                document.getElementById('uploadProgress').style.width = percent + '%';
+                document.getElementById('uploadProgress').innerText = Math.round(percent) + '%';
             }
-        }
+        });
 
-        // ===== Upload Preview Modal =====
-        function previewImage(event) {
-            const file = event.target.files[0];
-            if (!file) return;
+        xhr.onload = function() {
+            if (xhr.status === 200) {
+                window.location.reload();
+            } else {
+                alert('Upload failed');
+            }
+        };
 
-            const reader = new FileReader();
-            reader.onload = function(e) {
-                document.getElementById('previewImg').src = e.target.result;
-                document.getElementById('previewModal').style.display = 'flex';
-            };
-            reader.readAsDataURL(file);
-        }
+        xhr.open('POST', '/upload', true);
+        xhr.send(formData);
 
-        function submitUpload() {
-            document.getElementById('previewModal').style.display = 'none';
-            document.getElementById('uploadForm').submit();
-        }
-
-        function cancelUpload() {
-            document.getElementById('previewModal').style.display = 'none';
-            document.getElementById('imageInput').value = ''; // clear file input
-        }
-
-        function triggerUploadClick() {
-            document.getElementById('imageInput').click();
-        }        
-
-        // ===== Delete Confirmation Modal =====
-        let selectedToDelete = null;
-
-        function triggerDeleteModal(event) {
-            event.preventDefault();
-            selectedToDelete = document.getElementById('deleteForm');
-
-            const mainImage = document.getElementById('mainImage');
-            const mainSrc = mainImage.src.split('/').pop(); // extract filename
-
-            const select = document.querySelector('select[name="filename"]');
-            select.value = mainSrc; // set the dropdown to current image
-
-            document.getElementById('deletePreviewName').innerText = mainSrc;
-            document.getElementById('deletePreviewImg').src = '/static/images/gallery1/' + mainSrc;
-            document.getElementById('deleteModal').style.display = 'flex';
-        }
+        document.getElementById('uploadProgressContainer').style.display = 'block';
+    }
 
 
+    function cancelUpload() {
+        document.getElementById('previewModal').style.display = 'none';
+        document.getElementById('imageInput').value = '';
+    }
+
+    function triggerUploadClick() {
+        document.getElementById('imageInput').click();
+    }
+
+    let selectedToDelete = null;
+
+    function triggerDeleteModal(event) {
+        event.preventDefault();
+
+        const mainImage = document.getElementById('mainImage');
+        const mainSrc = mainImage.src.split('/').pop();
+
+        document.getElementById('deletePreviewName').innerText = mainSrc;
+        document.getElementById('deletePreviewImg').src = '/static/images/gallery1/' + mainSrc;
+        document.getElementById('deleteModal').style.display = 'flex';
+
+        // Save filename for confirm step
+        document.getElementById('deleteModal').dataset.filename = mainSrc;
+    }
+
+    function confirmDeleteModal() {
+        const mainImage = document.getElementById('mainImage');
+        const mainSrc = mainImage.src.split('/').pop();
+
+        const formData = new FormData();
+        formData.append('filename', mainSrc);
+
+        fetch('/delete', {
+            method: 'POST',
+            body: formData
+        })
+        .then(response => {
+            if (response.ok) {
+                window.location.reload();
+            } else {
+                response.text().then(text => {
+                    alert('Delete failed: ' + response.status + ' - ' + text);
+                });
+            }
+        })
+        .catch(error => {
+            alert('Delete error: ' + error);
+        });
+
+        document.getElementById('deleteModal').style.display = 'none';
+    }
 
 
-        function confirmDeleteModal() {
-            document.getElementById('deleteModal').style.display = 'none';
-            if (selectedToDelete) selectedToDelete.submit();
-        }
 
-        function cancelDeleteModal() {
-            document.getElementById('deleteModal').style.display = 'none';
-        }
+    function cancelDeleteModal() {
+        document.getElementById('deleteModal').style.display = 'none';
+    }
 
-        let imageList = [{% for image in images %}"{{ url_for('static', filename='images/gallery1/' + image) }}",{% endfor %}];
-        let currentIndex = 0;
+    let imageList = [{% for image in images %}"{{ url_for('static', filename='images/gallery1/' + image) }}",{% endfor %}];
+    let currentIndex = 0;
 
-        function updateMainImage() {
-            const mainImage = document.getElementById('mainImage');
-            mainImage.src = imageList[currentIndex];
-        }
+    function updateMainImage() {
+        const mainImage = document.getElementById('mainImage');
+        mainImage.src = imageList[currentIndex];
+    }
 
-        function showPrevImage() {
-            currentIndex = (currentIndex - 1 + imageList.length) % imageList.length;
-            updateMainImage();
-        }
+    function showPrevImage() {
+        currentIndex = (currentIndex - 1 + imageList.length) % imageList.length;
+        updateMainImage();
+    }
 
-        function showNextImage() {
-            currentIndex = (currentIndex + 1) % imageList.length;
-            updateMainImage();
-        }
-                
-            
+    function showNextImage() {
+        currentIndex = (currentIndex + 1) % imageList.length;
+        updateMainImage();
+    }
 
-    </script>
+    // expose only required functions
+    window.changeImage = changeImage;
+    window.showAdminModal = showAdminModal;
+    window.hideAdminModal = hideAdminModal;
+    window.validatePIN = validatePIN;
+    window.previewImage = previewImage;
+    window.submitUpload = submitUpload;
+    window.cancelUpload = cancelUpload;
+    window.triggerUploadClick = triggerUploadClick;
+    window.triggerDeleteModal = triggerDeleteModal;
+    window.confirmDeleteModal = confirmDeleteModal;
+    window.cancelDeleteModal = cancelDeleteModal;
+    window.showPrevImage = showPrevImage;
+    window.showNextImage = showNextImage;
+
+
+
+})();
+
+
+</script>
+
 
 </head>
 <body>
@@ -141,8 +207,6 @@
         <label id="customUploadBtn" for="imageInput"></label>
         <input id="imageInput" type="file" name="image" accept="image/*" required onchange="previewImage(event)" style="display:none;">
 
-
-
         <!-- Preview Modal -->
         <div id="previewModal" class="modal" style="display:none; align-items: center; justify-content: center;">
             <div class="modal-content" style="text-align: center;">
@@ -155,17 +219,13 @@
             </div>
         </div>
 
+        <div id="uploadProgressContainer" style="display:none; width: 100%; background: #ddd; margin-top: 1em;">
+            <div id="uploadProgress" style="width: 0%; height: 20px; background: #ff93c7; text-align: center; color: white;"></div>
+        </div>
 
-        <form id="deleteForm" action="/delete" method="post" style="text-align:center; margin-top: 1em;" onsubmit="triggerDeleteModal(event)">
-            <select name="filename" required>
-                {% for image in images %}
-                <option value="{{ image }}">{{ image }}</option>
-                {% endfor %}
-            </select>
 
-            <button id="customDeleteBtn" type="submit"></button>
+        <button id="customDeleteBtn" type="button" onclick="triggerDeleteModal(event)"></button>
 
-        </form>
 
 
 

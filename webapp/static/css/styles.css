@@ -217,3 +217,35 @@ h1, h2 {
 }
 
 
+header h1 {
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    font-size: clamp(0.8rem, 6vw, 2rem);
+}
+
+
+@media (max-width: 600px) {
+    section {
+        padding: 0.5rem;
+    }
+}
+
+@media (max-width: 600px) {
+    .modal-content {
+        padding: 1em;
+        max-width: 85%;
+        font-size: 1em;
+    }
+}
+
+@media (max-width: 600px) {
+    section {
+        padding: 0.5rem;
+        padding-bottom: 6rem;
+    }
+}
+
+
+
+

@@ -3,18 +3,27 @@ import uuid
 import shutil
 from flask import Flask, render_template, request, redirect, url_for, abort, session
 from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash, check_password_hash
+from flask_limiter import Limiter
+from flask_limiter.util import get_remote_address
 
 app = Flask(__name__)
 app.secret_key = 'REPLACE_WITH_A_SECRET_KEY'
 
 UPLOAD_FOLDER = os.path.join('static', 'images', 'gallery1')
-TRASH_FOLDER = os.path.join('private_trash')  # outside static
+TRASH_FOLDER = os.path.join('private_trash')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
-SECRET_PIN = '1111'
+
+# Replace with hashed version of your PIN
+SECRET_PIN_HASH = generate_password_hash('1111')
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
 os.makedirs(TRASH_FOLDER, exist_ok=True)
+
+limiter = Limiter(key_func=get_remote_address)
+limiter.init_app(app)
+
 
 def allowed_file(filename):
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
@@ -26,9 +35,13 @@ def index():
     return render_template('index.html', images=images, logged_in=logged_in)
 
 @app.route('/login', methods=['POST'])
+@limiter.limit("5 per minute")  # rate limit to prevent brute-force
 def login():
-    if request.form.get('pin') == SECRET_PIN:
+    pin = request.form.get('pin', '')
+    if check_password_hash(SECRET_PIN_HASH, pin):
         session['logged_in'] = True
+    else:
+        session['logged_in'] = False
     return redirect(url_for('index'))
 
 @app.route('/logout', methods=['POST'])
@@ -65,6 +78,19 @@ def delete():
         shutil.move(file_path, trash_path)
         return redirect(url_for('index'))
     return 'File not found', 404
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return redirect(url_for('winner'))
+
+@app.route('/winner')
+def winner():
+    return "<h1>You won! Now what? 😈</h1>", 200
+
+
+@app.route('/draw')
+def draw():
+    return render_template('draw.html')
 
 if __name__ == '__main__':
     app.run(debug=True)
