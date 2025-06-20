@@ -1671,13 +1671,20 @@ function drawBrushStrokeToPaintLayer(x, y) {
     lastX = x;
     lastY = y;
 
-    // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
     if (lineMode && lastFx !== null && lastFy !== null) {
         const dxFixed = fx - lastFx;
         const dyFixed = fy - lastFy;
         const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+
         const brushW = brushSize * fixedFBOWidth;
-        const stepSize = brushW * lineStepFactor;
+        let stepSize = brushW * lineStepFactor;
+
+        // Adaptive step size based on stroke speed
+        
+        const speedFactor = Math.min(4, dist / (brushW * 0.1)); // adjust 0.5 to tune sensitivity
+
+        stepSize *= speedFactor;
+
         const steps = Math.max(1, Math.floor(dist / stepSize));
         for (let i = 0; i <= steps; i++) {
             const interpX = lastFx + (dxFixed * i) / steps;
@@ -1696,9 +1703,10 @@ function drawBrushStrokeToPaintLayer(x, y) {
     if (strokeCount >= FLATTEN_THRESHOLD) {
         flattenStrokes();
     }
-    // Mark the scene to be redrawn (the render loop will pick it up)
+
     needsRedraw = true;
 }
+
 
 
 
@@ -2639,7 +2647,7 @@ function updateBrushSizeToggleUI() {
     brushSizeSliderContainer.querySelectorAll(".slider-group").forEach(slider => {
       slider.style.display = "none";
     });
-    brushSizeToggle.textContent = "Show";
+    brushSizeToggle.textContent = "Show Sliders";
   } else {
     brushSizeSliderContainer.style.width = "225px";
     brushSizeSliderContainer.style.padding = "10px";
@@ -2669,7 +2677,7 @@ function updateBrushContainerUI() {
   thumbnails.forEach(thumb => {
     thumb.style.display = brushContainerMinimized ? "none" : "inline-block";
   });
-  brushContainerToggle.textContent = brushContainerMinimized ? "Show" : "Hide";
+  brushContainerToggle.textContent = brushContainerMinimized ? "Show Brushes" : "Hide";
 }
 
 brushContainerToggle.addEventListener("click", () => {

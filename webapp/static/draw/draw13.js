@@ -1671,13 +1671,18 @@ function drawBrushStrokeToPaintLayer(x, y) {
     lastX = x;
     lastY = y;
 
-    // If lineMode is enabled and we have a previous fixed point, interpolate stamps.
     if (lineMode && lastFx !== null && lastFy !== null) {
         const dxFixed = fx - lastFx;
         const dyFixed = fy - lastFy;
         const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+
         const brushW = brushSize * fixedFBOWidth;
-        const stepSize = brushW * lineStepFactor;
+        let stepSize = brushW * lineStepFactor;
+
+        // Adaptive step size based on stroke speed
+        const speedFactor = Math.min(4, dist / (brushW * 0.5)); // adjust 0.5 to tune sensitivity
+        stepSize *= speedFactor;
+
         const steps = Math.max(1, Math.floor(dist / stepSize));
         for (let i = 0; i <= steps; i++) {
             const interpX = lastFx + (dxFixed * i) / steps;
@@ -1696,9 +1701,10 @@ function drawBrushStrokeToPaintLayer(x, y) {
     if (strokeCount >= FLATTEN_THRESHOLD) {
         flattenStrokes();
     }
-    // Mark the scene to be redrawn (the render loop will pick it up)
+
     needsRedraw = true;
 }
+
 
 
 
