@@ -7,8 +7,12 @@ from werkzeug.security import generate_password_hash, check_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
 
+
 app = Flask(__name__)
 app.secret_key = 'REPLACE_WITH_A_SECRET_KEY'
+
+from datetime import datetime
+app.jinja_env.globals['cache_bust'] = lambda: int(datetime.utcnow().timestamp())
 
 UPLOAD_FOLDER = os.path.join('static', 'images', 'gallery1')
 TRASH_FOLDER = os.path.join('private_trash')
@@ -93,4 +97,4 @@ def draw():
     return render_template('draw.html')
 
 if __name__ == '__main__':
-    app.run(debug=True)
+    app.run(debug=True, host='0.0.0.0', port=1111)

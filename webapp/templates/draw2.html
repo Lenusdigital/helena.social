@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HP v0.064 (131635 20250622)</title>
+  <title>HP v0.054 (144019 20250621)</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='draw/draw.css') }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -53,21 +53,13 @@
     <div class="bs" id="redoButton">
       <img src="{{ url_for('static', filename='draw/images/icons/redo.svg') }}" alt="Redo">
     </div>
-
     <div class="bs" id="cleanButton">
       <img src="{{ url_for('static', filename='draw/images/icons/edit-clear-history.svg') }}" alt="Clear">
     </div>
-
     <div class="bs" id="eraserToggle">
       <img src="{{ url_for('static', filename='draw/images/icons/eraser.svg') }}" alt="Erase">
       <img src="{{ url_for('static', filename='draw/images/icons/brush.svg') }}" alt="Brush" style="display: none;">
     </div>
-
-    <div class="bs" id="sendToChatButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/share-ios.svg') }}" alt="Clear">
-    </div>
-
-
   </div>
 
   <div id="colorsContainer">
@@ -83,14 +75,14 @@
   </div>
 
 <div id="profileSection">
-    <div id="profileIconButton">
+    <div class="bs" id="profileIconButton">
         <img src="{{ url_for('static', filename='draw/images/icons/cat.svg') }}" alt="Profile" />
     </div>
 </div>
 
 <div id="profileModal" class="modal">
   <div class="modal-content">
-    <span class="close">x</span>
+    <span class="close">&times;</span>
     <h2>Edit Profile</h2>
 
     <div id="profileImagePreviewContainer">
@@ -107,43 +99,6 @@
 
     <div class="bs" id="saveProfileButton">Save Profile</div>
   </div>
-</div>
-
-
-<!-- Chat Button -->
-<!-- Chat Button with badge -->
-<div id="chatToggleBtn" title="Open Chat" class="chat-toggle-btn">
-    <img src="{{ url_for('static', filename='draw/images/icons/chat-bubble.svg') }}" alt="Chat">
-    <div id="chatUserBadge" class="chat-user-badge">0</div>
-</div>
-
-
-<!-- Chat Overlay -->
-<div id="chatOverlay" class="chat-overlay hidden">
-    <div class="chat-header">
-        <span>Chat Room</span>
-
-        <span id="chatCloseBtn" class="chat-close-btn close">          
-          <svg id="Flat" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256">
-            <path d="M202.82861,197.17188a3.99991,3.99991,0,1,1-5.65722,5.65624L128,133.65723,58.82861,202.82812a3.99991,3.99991,0,0,1-5.65722-5.65624L122.343,128,53.17139,58.82812a3.99991,3.99991,0,0,1,5.65722-5.65624L128,122.34277l69.17139-69.17089a3.99991,3.99991,0,0,1,5.65722,5.65624L133.657,128Z"/>
-          </svg>
-        </span>
-        
-    </div>
-
-    <!-- Connected Users -->
-    <div id="chatUsers" class="chat-users">
-        <!-- User avatars will appear here -->
-    </div>
-
-    <!-- Chat Messages -->
-    <div id="chatMessages" class="chat-messages"></div>
-
-    <!-- Chat Input -->
-    <div class="chat-input-area">
-        <input type="text" id="chatInput" placeholder="Type your message..." />
-        <button id="chatSendBtn">Send</button>
-    </div>
 </div>
 
 
@@ -215,12 +170,7 @@
 
   <div id="footer"></div>
 
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='js/highlight/style.min.css') }}?v={{ cache_bust() }}">
-  <script src="{{ url_for('static', filename='js/highlight/highlight.min.js') }}?v={{ cache_bust() }}"></script>
-  <script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
-  <script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
-  <script src="{{ url_for('static', filename='draw/draw20.js') }}?v={{ cache_bust() }}"></script>
+  <script src="{{ url_for('static', filename='draw/draw17.js') }}?v={{ cache_bust() }}"></script>
 
 
 </body>
