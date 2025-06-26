@@ -6,6 +6,9 @@ from werkzeug.utils import secure_filename
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
+import sqlite3
+import json
+
 
 
 app = Flask(__name__)
@@ -18,8 +21,12 @@ UPLOAD_FOLDER = os.path.join('static', 'images', 'gallery1')
 TRASH_FOLDER = os.path.join('private_trash')
 ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg', 'gif'}
 
-# Replace with hashed version of your PIN
-SECRET_PIN_HASH = generate_password_hash('1111')
+
+from dotenv import load_dotenv
+load_dotenv()
+
+# Read PIN from environment variable and hash it
+SECRET_PIN_HASH = generate_password_hash(os.environ.get("APP_PIN", "default"))
 
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -27,6 +34,18 @@ os.makedirs(TRASH_FOLDER, exist_ok=True)
 
 limiter = Limiter(key_func=get_remote_address)
 limiter.init_app(app)
+
+
+from functools import wraps
+
+def login_required(f):
+    @wraps(f)
+    def decorated_function(*args, **kwargs):
+        if not session.get('logged_in'):
+            return redirect(url_for('index'))  # or redirect to a login page
+        return f(*args, **kwargs)
+    return decorated_function
+
 
 
 def allowed_file(filename):
@@ -95,6 +114,133 @@ def winner():
 @app.route('/draw')
 def draw():
     return render_template('draw.html')
+
+
+
+from datetime import datetime, timedelta
+
+def webkit_to_datetime(webkit_timestamp):
+    if not webkit_timestamp:
+        return None
+    return datetime(1601, 1, 1) + timedelta(microseconds=webkit_timestamp)
+
+@app.route('/history')
+@login_required
+def history():
+    results = []
+    query = request.args.get('query', '')
+    status = ''
+    per_page = 50
+    page = request.args.get('page', 1, type=int)
+    offset = (page - 1) * per_page
+    total = 0
+
+    try:
+        conn = sqlite3.connect('History')
+        cursor = conn.cursor()
+
+        if query:
+            cursor.execute("SELECT COUNT(*) FROM urls WHERE title LIKE ? OR url LIKE ?", 
+                           ('%' + query + '%', '%' + query + '%'))
+            total = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT id, title, url, last_visit_time FROM urls
+                WHERE title LIKE ? OR url LIKE ?
+                ORDER BY last_visit_time DESC
+                LIMIT ? OFFSET ?
+            """, ('%' + query + '%', '%' + query + '%', per_page, offset))
+        else:
+            cursor.execute("SELECT COUNT(*) FROM urls")
+            total = cursor.fetchone()[0]
+
+            cursor.execute("""
+                SELECT id, title, url, last_visit_time FROM urls
+                ORDER BY last_visit_time DESC
+                LIMIT ? OFFSET ?
+            """, (per_page, offset))
+
+        rows = cursor.fetchall()
+        conn.close()
+
+        results = [
+            {
+                'id': row[0],
+                'title': row[1],
+                'url': row[2],
+                'date': webkit_to_datetime(row[3]).strftime('%Y-%m-%d %H:%M:%S') if row[3] else "Unknown"
+            }
+            for row in rows
+        ]
+
+        total_pages = (total + per_page - 1) // per_page
+        status = f"Showing page {page} of {total_pages}, {total} total record(s)."
+
+    except Exception as e:
+        status = f"Error reading database: {str(e)}"
+        total_pages = 1
+
+    return render_template(
+        'history.html',
+        results=results,
+        query=query,
+        status=status,
+        page=page,
+        total_pages=total_pages
+    )
+
+
+
+@app.route('/users')
+@login_required
+def users():
+    query = request.args.get('query', '').lower()
+    filter_type = request.args.get('filter_type', 'name')
+    selected = query  # for use in client/company selection display
+    results = []
+    companies, names = [], []
+    
+    try:
+        with open('all-users-cleaned.json', 'r') as f:
+            all_users = json.load(f)
+
+        # Deduplicate
+        seen = set()
+        unique_users = []
+        for user in all_users:
+            key = (user.get('name'), user.get('email'), user.get('company'))
+            if key not in seen:
+                seen.add(key)
+                unique_users.append(user)
+
+        # Collect for display
+        companies = sorted(set(user['company'] for user in unique_users if user.get('company')))
+        names = sorted(set(user['name'] for user in unique_users if user.get('name')))
+
+        if filter_type == 'company' and query:
+            results = [u for u in unique_users if u.get('company', '').lower() == query]
+        elif filter_type == 'name' and query:
+            results = [u for u in unique_users if u.get('name', '').lower() == query]
+        elif filter_type == 'name':
+            results = unique_users  # fallback: show all
+
+    except Exception as e:
+        results = []
+        companies = []
+        names = []
+        selected = ''
+    
+    return render_template(
+        'users.html',
+        results=results,
+        filter_type=filter_type,
+        query=query,
+        selected=selected,
+        companies=companies,
+        names=names
+    )
+
+
 
 if __name__ == '__main__':
     app.run(debug=True, host='0.0.0.0', port=1111)

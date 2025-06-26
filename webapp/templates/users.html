@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>User Directory</title>
+    <style>
+        body { display: flex; height: 100vh; margin: 0; font-family: Avenir, sans-serif; }
+        .sidebar { width: 30%; border-right: 1px solid #ccc; padding: 1rem; overflow-y: auto; }
+        .content { flex: 1; padding: 1rem; }
+        .user-list { margin-top: 1rem; }
+        .user-item { font-size: 0.9rem; margin-bottom: 0.4rem; cursor: pointer; color: blue; text-decoration: underline; }
+        .user-item:hover { background-color: #eef; }
+        .user-item.active { font-weight: bold; background-color: #dceeff; }
+        .user-details { font-size: 1rem; line-height: 1.6; }
+        .filter-bar { margin-bottom: 1rem; }
+        .filter-bar select,
+        .filter-bar input[type="text"] {
+            padding: 0.3rem;
+            margin-right: 0.5rem;
+        }
+    </style>
+</head>
+<body>
+    <div class="sidebar">
+        <div class="filter-bar">
+            <form id="filterForm">
+                <select name="filter_type" id="filterType">
+                    <option value="name" {% if filter_type == 'name' %}selected{% endif %}>Name</option>
+                    <option value="company" {% if filter_type == 'company' %}selected{% endif %}>Company</option>
+                </select>
+                <input type="text" name="query" id="queryInput" placeholder="Search..." value="{{ query }}">
+            </form>
+        </div>
+
+        <div class="user-list" id="userList">
+            {% if filter_type == 'company' %}
+                {% for company in companies if query in company|lower %}
+                    <div class="user-item {% if selected == company.lower() %}active{% endif %}"
+                         onclick="window.location.href='{{ url_for('users', filter_type='company', query=company) }}'">
+                        {{ loop.index }}. {{ company }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                {% for name in names if query in name|lower %}
+                    <div class="user-item {% if selected == name.lower() %}active{% endif %}"
+                         onclick="window.location.href='{{ url_for('users', filter_type='name', query=name) }}'">
+                        {{ loop.index }}. {{ name }}
+                    </div>
+                {% endfor %}
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="user-details">
+            {% if results %}
+                {% for user in results %}
+                    <div style="margin-bottom: 1.5rem;">
+                        <strong>{{ loop.index }}.</strong><br>
+                        <strong>Name:</strong> {{ user.name }}<br>
+                        <strong>Email:</strong> <a href="mailto:{{ user.email }}">{{ user.email }}</a><br>
+                        <strong>Company:</strong> {{ user.company }}
+                    </div>
+                {% endfor %}
+            {% else %}
+                <em>Select a name or company to view details.</em>
+            {% endif %}
+        </div>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', function () {
+            const queryInput = document.getElementById('queryInput');
+            const filterType = document.getElementById('filterType');
+            const userList = document.getElementById('userList');
+
+            function updateSidebar() {
+                const query = encodeURIComponent(queryInput.value);
+                const type = encodeURIComponent(filterType.value);
+
+                fetch(`{{ url_for('users') }}?filter_type=${type}&query=${query}`)
+                    .then(response => response.text())
+                    .then(html => {
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(html, 'text/html');
+                        const newList = doc.getElementById('userList');
+                        if (newList) userList.innerHTML = newList.innerHTML;
+                    });
+            }
+
+            let timeout;
+            queryInput.addEventListener('input', () => {
+                clearTimeout(timeout);
+                timeout = setTimeout(updateSidebar, 300);
+            });
+
+            filterType.addEventListener('change', updateSidebar);
+        });
+    </script>
+</body>
+</html>

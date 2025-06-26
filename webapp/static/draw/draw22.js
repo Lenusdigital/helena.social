@@ -1,8 +1,15 @@
 console.log("Helena Paint - draw19.js")
 
+function isMobile() {
+    return /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
+}
+
 const canvas = document.getElementById("glCanvas");
 
-const gl = canvas.getContext("webgl2", { alpha: true });
+const gl = canvas.getContext("webgl2", { 
+    alpha: true, 
+    powerPreference: "high-performance" 
+});
 
 const imageLoader = document.getElementById("imageLoader");
 const colorPicker = document.getElementById("colorPicker");
@@ -63,6 +70,9 @@ let isDrawing = false;
 let floodFillProgram;
 
 let currentTool = 'draw';
+
+let fixedFBOWidth = 0;
+let fixedFBOHeight = 0;
 
 
 //-------
@@ -1212,13 +1222,23 @@ function initFloodFillProgram() {
             }
 
             // Check neighbors:
-            vec2 offsets[4];
+            vec2 offsets[8];
             offsets[0] = vec2(-uTexelSize.x, 0.0);
             offsets[1] = vec2(uTexelSize.x, 0.0);
             offsets[2] = vec2(0.0, -uTexelSize.y);
             offsets[3] = vec2(0.0, uTexelSize.y);
+            offsets[4] = vec2(-uTexelSize.x, -uTexelSize.y);
+            offsets[5] = vec2(-uTexelSize.x, uTexelSize.y);
+            offsets[6] = vec2(uTexelSize.x, -uTexelSize.y);
+            offsets[7] = vec2(uTexelSize.x, uTexelSize.y);
 
-            for (int i = 0; i < 4; i++) {
+            // vec2 offsets[4];
+            // offsets[0] = vec2(-uTexelSize.x, 0.0);
+            // offsets[1] = vec2(uTexelSize.x, 0.0);
+            // offsets[2] = vec2(0.0, -uTexelSize.y);
+            // offsets[3] = vec2(0.0, uTexelSize.y);
+
+            for (int i = 0; i < 8; i++) {
                 vec4 neighbor = texture2D(uSource, vTexCoord + offsets[i]);
                 bool neighborFilled = distance(neighbor, uFillColor) < threshold;
                 if (neighborFilled && isTarget) {
@@ -1226,6 +1246,15 @@ function initFloodFillProgram() {
                     return;
                 }
             }
+
+            // for (int i = 0; i < 4; i++) {
+            //     vec4 neighbor = texture2D(uSource, vTexCoord + offsets[i]);
+            //     bool neighborFilled = distance(neighbor, uFillColor) < threshold;
+            //     if (neighborFilled && isTarget) {
+            //         gl_FragColor = uFillColor;
+            //         return;
+            //     }
+            // }
 
             gl_FragColor = current;
         }
@@ -1406,7 +1435,7 @@ function initFloodFBOs() {
 //–––––––––––––––––––
 
 let strokeCount = 0;
-const FLATTEN_THRESHOLD = 150;
+const FLATTEN_THRESHOLD = isMobile() ? 50 : 150;
 
 function flattenStrokes() {
 
@@ -1481,7 +1510,7 @@ let sharedBuffer = null; // Add this global buffer initialization
 // UNDO
 //---------------------------------------------
 
-const UNDO_STEPS = 150;
+const UNDO_STEPS = isMobile() ? 8 : 30;
 let strokeHistory = []; // will be array of line groups: [ [step1, step2, ...], ... ]
 let redoHistory = [];
 
@@ -1574,6 +1603,7 @@ function undoStroke() {
 
         gl.bindFramebuffer(gl.FRAMEBUFFER, null);
         needsRedraw = true;
+        showStatusMessage("Undo", "info");
     }
 }
 
@@ -1596,8 +1626,78 @@ function redoStroke() {
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
 
         needsRedraw = true;
+        showStatusMessage("Red", "info");
     }
 }
+
+
+
+// ---- Monitor Frame Time + Undo Memory ---- //
+
+let frameTimes = [];
+let memoryWarningShown = false;
+let frameRateMonitoringActive = false;  // <-- NEW
+
+function monitorFrameTime() {
+    const now = performance.now();
+
+    if (frameTimes.length > 0) {
+        const delta = now - frameTimes[frameTimes.length - 1];
+        frameTimes.push(now);
+
+        if (frameTimes.length > 30) frameTimes.shift();
+
+        if (frameRateMonitoringActive) {  // <-- only after first interaction
+            const avgDelta = frameTimes.reduce((a, b, i, arr) => i > 0 ? a + (b - arr[i - 1]) : a, 0) / (frameTimes.length - 1);
+
+            // If average frame time > 80ms (i.e. < 12fps) → warn
+            if (avgDelta > 80 && !memoryWarningShown) {
+                console.warn("⚠️ Low frame rate detected! Possible memory overload.");
+                showStatusMessage("⚠️ App running slow — consider undo or saving", "warning");
+                memoryWarningShown = true;
+            }
+        }
+    } else {
+        frameTimes.push(now);
+    }
+
+    requestAnimationFrame(monitorFrameTime);
+}
+
+// ---- Monitor Undo Memory Usage ---- //
+
+function estimateUndoMemoryMB() {
+    if (typeof fixedFBOWidth === "undefined" || typeof fixedFBOHeight === "undefined") return 0; // safety
+    const textureMB = (fixedFBOWidth * fixedFBOHeight * 4) / (1024 * 1024);
+    const totalMB = textureMB * strokeHistory.length;
+    return totalMB;
+}
+
+function monitorUndoMemory() {
+    const mb = estimateUndoMemoryMB();
+    const threshold = isMobile() ? 60 : 150;
+
+    // Update UI indicator
+    const indicator = document.getElementById("undoMemoryIndicator");
+    if (indicator) {
+        indicator.textContent = `Undo Mem: ${mb.toFixed(1)} MB`;
+    }
+
+    // Warning
+    if (mb > threshold && !memoryWarningShown) {
+        console.warn(`⚠️ Undo stack uses ${mb.toFixed(1)} MB — may overload GPU`);
+        showStatusMessage(`⚠️ Undo stack large (${mb.toFixed(1)} MB) — flatten or undo!`, "warning");
+        memoryWarningShown = true;
+    }
+
+    setTimeout(monitorUndoMemory, 2000);
+}
+
+
+// ---- Start both monitors ---- //
+monitorFrameTime();
+monitorUndoMemory();
+
 
 
 
@@ -1650,30 +1750,30 @@ canvas.addEventListener("pointerup", (e) => {
 let isErasing = false;
 
 function updateEraserSliderVisibility() {
-  const eraseSlider = document.getElementById("eraseStrengthSlider");
-  if (eraseSlider) {
-    eraseSlider.style.display = isErasing ? "block" : "none";
-  }
+    const eraseSlider = document.getElementById("eraseStrengthSlider");
+    if (eraseSlider) {
+        eraseSlider.style.display = isErasing ? "block" : "none";
+    }
 }
-
-
 
 function toggleEraser() {
     isErasing = !isErasing;
 
     updateEraserSliderVisibility();
     updateEraserButton();
+
+    // Show status message:
+    showStatusMessage(isErasing ? "Mode: Erase" : "Mode: Paint", "info");
 }
 
 function updateEraserButton() {
     const eraserToggle = document.querySelector("#eraserToggle");
-    eraserToggle.innerHTML = isErasing 
+    eraserToggle.innerHTML = isErasing
         ? `<img src="/static/draw/images/icons/eraser.svg" alt="Erase">`
         : `<img src="/static/draw/images/icons/brush.svg" alt="Brush">`;
 
     needsRedraw = true;
 }
-
 
 document.addEventListener("keydown", (event) => {
     if (isUserTyping()) return;
@@ -1689,6 +1789,7 @@ document.addEventListener("DOMContentLoaded", () => {
         updateEraserButton();
     }
 });
+
 
 
 // Listen for keydown events to modify eraser strength
@@ -3459,6 +3560,8 @@ function sendCurrentArtworkToChat(name = "Untitled") {
 
                     socket.send(JSON.stringify(chatMsg));
                     console.log("[sendCurrentArtworkToChat] Artwork sent to chat.");
+                    showStatusMessage("Send to Chat", "info");
+
                 }
             };
 
@@ -3756,18 +3859,17 @@ document.getElementById("shareButton").addEventListener("click", shareCurrentArt
 
 // Function to clear the strokes but leave the background image intact
 function clearCanvas() {
-
-
     console.log("Clearing canvas...");
 
-    // Call undoStroke to clear everything like resetting the canvas to the initial state
+    // Call undoStroke repeatedly to clear everything
     while (strokeHistory.length > 0) {
         undoStroke();
     }
 
     drawScene(); // Redraw the scene after clearing
 
-
+    // Show status message
+    showStatusMessage("Canvas cleared", "info");
 }
 
 // Event listener for the Clean button
