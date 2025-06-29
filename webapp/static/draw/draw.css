@@ -22,7 +22,7 @@ canvas {
 
 #glCanvas {}
 
-#brushSizeSliderContainer {
+/*#brushSizeSliderContainer {
     position: fixed;
     left: 3rem;
     bottom: 3rem;
@@ -39,6 +39,90 @@ canvas {
     backdrop-filter: blur(12px);
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
 }
+*/
+
+#brushSizeSliderContainer {
+    position: fixed;
+    left: 3rem;
+    top: auto; 
+    bottom: 3rem;
+    width: 120px;
+    display: flex;
+    flex-direction: column;    
+    gap: 1rem;
+    padding: 0;
+    border-radius: 5px;
+    z-index: 100;
+    background: rgba(223,223,223,0.5);
+    backdrop-filter: blur(12px);
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
+    touch-action: none;
+    padding: 0.5rem;
+}
+
+
+#brushSizeDragBar {
+  width: 54%;
+  height: 1.2rem;
+  cursor: grab;
+  font-weight: bold;
+  font-size: 11px;
+  text-align: center;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0),
+      rgba(0, 0, 0, 0.12) 2px,
+      transparent 2px,
+      transparent 4px
+    ),
+    rgba(0, 0, 0, 0.08); /* fallback base color */
+  color: #333;
+  user-select: none;
+  touch-action: none;
+  transition: background 0.2s ease-in-out;
+  border-radius: 0.1rem;
+}
+
+#brushSizeDragBar:active {
+  cursor: grabbing;
+  background:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.2),
+      rgba(0, 0, 0, 0.2) 2px,
+      transparent 2px,
+      transparent 4px
+    ),
+    rgba(0, 0, 0, 0.15);
+}
+
+
+
+.brush-panel-visible {
+  width: 125px;
+  padding: 10px;
+  gap: 1rem;
+}
+
+.brush-panel-hidden {
+  width: 0;
+  padding: 0;
+  gap: 0;
+}
+
+.brush-panel-visible .slider-group {
+  display: block;
+}
+
+.brush-panel-hidden .slider-group {
+  display: none;
+}
+
+
+
+
+
 
 #opacitySliderContainer {
     position: fixed;
@@ -233,7 +317,7 @@ input[type="color" i]:hover {
 #colorsContainer {
     position: absolute;
     right: 0;
-    bottom: 30px;
+    bottom: 36px;
     padding: 0.2rem;
 }
 
@@ -247,10 +331,11 @@ input[type="color" i]:hover {
 
 .bs {
     border: 1px solid rgba(0,0,0,0.022);
-    background: rgba(255,255,255,0.25);
-    padding: 0.15rem;
-    font-size: 0.8rem;
-    border-radius: 0.5rem;
+    background: rgba(255,255,255,0.55);
+    padding: 0.5rem;
+    font-weight: bold;
+    font-size: 11px;
+    border-radius: 1rem;
     width: auto;
     transition: all 0.25s ease-in-out;
     pointer-events: all;
@@ -292,6 +377,14 @@ input[type="color" i]:hover {
          1px -1px 1px black,
         -1px  1px 1px black,
          1px  1px 3px black;    
+}
+
+.bs-y {
+    background-color: #FFEB3B;
+}
+
+.bs-blue {
+    background-color: rgb(0 226 255);
 }
 
 
@@ -599,7 +692,6 @@ input[type="color" i]:hover {
 }
 
 
-
 #brushSizeToggle {
   cursor: pointer;
   font-weight: bold;
@@ -609,8 +701,10 @@ input[type="color" i]:hover {
   border-radius: 4px;
   user-select: none;
   text-align: center;
-  margin-bottom: 0px;
-  margin-left: auto;
+  margin: 0.2rem;
+  position: absolute;
+  right: 0;
+  top: 0;
 }
 
 
@@ -723,7 +817,8 @@ input[type="color" i]:hover {
     padding: 0.5rem;
     border-radius: 5px;
     border: 1px solid #ccc;
-    font-size: 1rem;
+    font-size: 11px;
+    font-weight: bold;
     box-sizing: border-box;
     margin-bottom: 0.5rem;
 }

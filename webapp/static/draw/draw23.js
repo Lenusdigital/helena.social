@@ -1703,7 +1703,7 @@ canvas.addEventListener("pointerdown", (e) => {
     currentLineGroup = [];
     redoHistory = [];
 
-    saveStrokeState();
+    //saveStrokeState();
 
 });
 
@@ -1719,6 +1719,7 @@ canvas.addEventListener("pointerup", (e) => {
         }
     }
     currentLineGroup = null;
+    saveStrokeState();
 });
 
 
@@ -2032,73 +2033,174 @@ function drawBrushOverlay() {
 }
 
 
-// Update drawScene by removing the internal requestAnimationFrame call:
 function drawScene() {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    gl.viewport(0, 0, canvas.width, canvas.height);
-    gl.clearColor(1, 1, 1, 1);
-    gl.clear(gl.COLOR_BUFFER_BIT);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.viewport(0, 0, canvas.width, canvas.height);
+  gl.clearColor(0, 0, 0, 0); // Transparent base
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
-    // Draw background image using quadProgram
+  // --- 1. Draw background image ---
+  if (texture) {
     gl.useProgram(quadProgram);
-    let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+
+    const flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
     gl.uniform1f(flipLoc, -1.0);
-    let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
+    const resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
     gl.uniform2f(resLoc, canvas.width, canvas.height);
+
     const quadVertices = new Float32Array([
-        0, 0, 0, 0,
-        canvas.width, 0, 1, 0,
-        0, canvas.height, 0, 1,
-        0, canvas.height, 0, 1,
-        canvas.width, 0, 1, 0,
-        canvas.width, canvas.height, 1, 1
+      0, 0, 0, 0,
+      canvas.width, 0, 1, 0,
+      0, canvas.height, 0, 1,
+      0, canvas.height, 0, 1,
+      canvas.width, 0, 1, 0,
+      canvas.width, canvas.height, 1, 1
     ]);
-    let buffer = gl.createBuffer();
+
+    const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-    let posLoc = gl.getAttribLocation(quadProgram, "a_position");
+
+    const posLoc = gl.getAttribLocation(quadProgram, "a_position");
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-    let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+
+    const texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
     gl.enableVertexAttribArray(texLoc);
     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
     const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
     gl.uniform1i(texUniform, 0);
+
+    gl.disable(gl.BLEND); // No blending needed for background
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.deleteBuffer(buffer);
+  }
 
-    // Draw persistent paint layer
+  // --- 2. Draw persistent paint layer with blending ---
+  if (paintTexture) {
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     gl.useProgram(quadProgram);
-    flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+
+    const flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
     gl.uniform1f(flipLoc, -1.0);
-    buffer = gl.createBuffer();
+    const resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
+    gl.uniform2f(resLoc, canvas.width, canvas.height);
+
+    const quadVertices = new Float32Array([
+      0, 0, 0, 0,
+      canvas.width, 0, 1, 0,
+      0, canvas.height, 0, 1,
+      0, canvas.height, 0, 1,
+      canvas.width, 0, 1, 0,
+      canvas.width, canvas.height, 1, 1
+    ]);
+
+    const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-    posLoc = gl.getAttribLocation(quadProgram, "a_position");
+
+    const posLoc = gl.getAttribLocation(quadProgram, "a_position");
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-    texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+
+    const texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
     gl.enableVertexAttribArray(texLoc);
     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, paintTexture);
+    const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
     gl.uniform1i(texUniform, 0);
+
     gl.drawArrays(gl.TRIANGLES, 0, 6);
     gl.deleteBuffer(buffer);
     gl.disable(gl.BLEND);
+  }
 
-    // Draw brush overlay
+  // --- 3. Draw brush overlay (preview cursor) ---
+  if (overlayProgram) {
     gl.useProgram(overlayProgram);
-    flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
+    const flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
     gl.uniform1f(flipLoc, -1.0);
-    resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
+    const resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
     gl.uniform2f(resLoc, canvas.width, canvas.height);
     drawBrushOverlay();
+  }
 }
+
+
+
+// // Update drawScene by removing the internal requestAnimationFrame call:
+// function drawScene() {
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+//     gl.viewport(0, 0, canvas.width, canvas.height);
+//     gl.clearColor(1, 1, 1, 1);
+//     gl.clear(gl.COLOR_BUFFER_BIT);
+
+//     // Draw background image using quadProgram
+//     gl.useProgram(quadProgram);
+//     let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+//     gl.uniform1f(flipLoc, -1.0);
+//     let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
+//     gl.uniform2f(resLoc, canvas.width, canvas.height);
+//     const quadVertices = new Float32Array([
+//         0, 0, 0, 0,
+//         canvas.width, 0, 1, 0,
+//         0, canvas.height, 0, 1,
+//         0, canvas.height, 0, 1,
+//         canvas.width, 0, 1, 0,
+//         canvas.width, canvas.height, 1, 1
+//     ]);
+//     let buffer = gl.createBuffer();
+//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
+//     let posLoc = gl.getAttribLocation(quadProgram, "a_position");
+//     gl.enableVertexAttribArray(posLoc);
+//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+//     let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+//     gl.enableVertexAttribArray(texLoc);
+//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+//     gl.activeTexture(gl.TEXTURE0);
+//     gl.bindTexture(gl.TEXTURE_2D, texture);
+//     const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
+//     gl.uniform1i(texUniform, 0);
+//     gl.drawArrays(gl.TRIANGLES, 0, 6);
+//     gl.deleteBuffer(buffer);
+
+//     // Draw persistent paint layer
+//     gl.enable(gl.BLEND);
+//     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+//     gl.useProgram(quadProgram);
+//     flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+//     gl.uniform1f(flipLoc, -1.0);
+//     buffer = gl.createBuffer();
+//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
+//     posLoc = gl.getAttribLocation(quadProgram, "a_position");
+//     gl.enableVertexAttribArray(posLoc);
+//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+//     texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+//     gl.enableVertexAttribArray(texLoc);
+//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+//     gl.activeTexture(gl.TEXTURE0);
+//     gl.bindTexture(gl.TEXTURE_2D, paintTexture);
+//     gl.uniform1i(texUniform, 0);
+//     gl.drawArrays(gl.TRIANGLES, 0, 6);
+//     gl.deleteBuffer(buffer);
+//     gl.disable(gl.BLEND);
+
+//     // Draw brush overlay
+//     gl.useProgram(overlayProgram);
+//     flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
+//     gl.uniform1f(flipLoc, -1.0);
+//     resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
+//     gl.uniform2f(resLoc, canvas.width, canvas.height);
+//     drawBrushOverlay();
+// }
 
 
 //–––––––––––––––––––
@@ -3526,6 +3628,11 @@ document.getElementById("sendToChatButton").addEventListener("click", () => {
     sendCurrentArtworkToChat("Quick Share");
 });
 
+
+
+
+
+
 /* Min Max */
 
 
@@ -3534,29 +3641,34 @@ const brushSizeSliderContainer = document.getElementById("brushSizeSliderContain
 
 let minimized = localStorage.getItem("brushSizeToggleMinimized") === "true";
 
+
 function updateBrushSizeToggleUI() {
+  brushSizeSliderContainer.dataset.minimized = minimized ? "true" : "false";
+
+  brushSizeSliderContainer.classList.remove("brush-panel-visible", "brush-panel-hidden");
+
   if (minimized) {
-    brushSizeSliderContainer.style.width = "0px";
-    brushSizeSliderContainer.style.padding = "0px";
-    brushSizeSliderContainer.style.gap = "0";
-    brushSizeSliderContainer.querySelectorAll(".slider-group").forEach(slider => {
-      slider.style.display = "none";
-    });
+    brushSizeSliderContainer.classList.add("brush-panel-hidden");
     brushSizeToggle.textContent = "Sliders";
-    brushSizeSliderContainer.style.left = "0";
-    brushSizeSliderContainer.style.bottom = "0";
+
+    const rect = brushSizeSliderContainer.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+
+    if (rect.left < 0 || rect.top < 0 || rect.left > vw - 40 || rect.top > vh - 40) {
+      brushSizeSliderContainer.style.left = "10px";
+      brushSizeSliderContainer.style.top = "10px";
+    }
+
   } else {
-    brushSizeSliderContainer.style.width = "125px";
-    brushSizeSliderContainer.style.padding = "10px";
-    brushSizeSliderContainer.style.gap = "1rem";
-    brushSizeSliderContainer.style.left = "3.5rem";
-    brushSizeSliderContainer.style.bottom = "3.5rem";
-    brushSizeSliderContainer.querySelectorAll(".slider-group").forEach(slider => {
-      slider.style.display = "block";
-    });
+    brushSizeSliderContainer.classList.add("brush-panel-visible");
     brushSizeToggle.textContent = "Hide";
   }
 }
+
+updateBrushSizeToggleUI();
+
+
 
 brushSizeToggle.addEventListener("click", () => {
   minimized = !minimized;
@@ -3586,6 +3698,79 @@ brushContainerToggle.addEventListener("click", () => {
 });
 
 updateBrushContainerUI();
+
+
+//--------------
+// Extra UI
+//-------------
+
+  const panel = document.getElementById("brushSizeSliderContainer");
+  const dragBar = document.getElementById("brushSizeDragBar");
+
+  let offsetX = 0, offsetY = 0, isDragging = false;
+
+
+dragBar.addEventListener("pointerdown", (e) => {
+  // ✅ allow dragging even when minimized
+  isDragging = true;
+  offsetX = e.clientX - panel.offsetLeft;
+  offsetY = e.clientY - panel.offsetTop;
+  dragBar.setPointerCapture(e.pointerId);
+  dragBar.style.cursor = "grabbing";
+});
+
+dragBar.addEventListener("pointermove", (e) => {
+  if (!isDragging) return;
+  const x = e.clientX - offsetX;
+  const y = e.clientY - offsetY;
+  panel.style.left = `${x}px`;
+  panel.style.top = `${y}px`;
+  panel.style.bottom = "auto";
+});
+
+dragBar.addEventListener("pointerup", (e) => {
+  isDragging = false;
+  dragBar.releasePointerCapture(e.pointerId);
+  dragBar.style.cursor = "grab";
+});
+
+dragBar.addEventListener("pointercancel", () => {
+  isDragging = false;
+  dragBar.style.cursor = "grab";
+});
+
+
+  // dragBar.addEventListener("pointerdown", (e) => {
+  //   if (panel.dataset.minimized === "true") return; // ✅ no JS var used
+  //   isDragging = true;
+  //   offsetX = e.clientX - panel.offsetLeft;
+  //   offsetY = e.clientY - panel.offsetTop;
+  //   dragBar.setPointerCapture(e.pointerId);
+  //   dragBar.style.cursor = "grabbing";
+  // });
+
+  // dragBar.addEventListener("pointermove", (e) => {
+  //   if (!isDragging || panel.dataset.minimized === "true") return;
+  //   const x = e.clientX - offsetX;
+  //   const y = e.clientY - offsetY;
+  //   panel.style.left = `${x}px`;
+  //   panel.style.top = `${y}px`;
+  //   panel.style.bottom = "auto";
+  // });
+
+  // dragBar.addEventListener("pointerup", (e) => {
+  //   isDragging = false;
+  //   dragBar.releasePointerCapture(e.pointerId);
+  //   dragBar.style.cursor = "grab";
+  // });
+
+  // dragBar.addEventListener("pointercancel", () => {
+  //   isDragging = false;
+  //   dragBar.style.cursor = "grab";
+  // });
+
+
+
 
 
 /* Share */    
@@ -3680,8 +3865,6 @@ document.getElementById("shareButton").addEventListener("click", shareCurrentArt
             setTimeout(() => messageBubble.remove(), 700);
         }, 700);
     }
-
-
 
 
     async function loadArtwork(id) {
@@ -3812,7 +3995,6 @@ function clearCanvas() {
 document.getElementById("cleanButton").addEventListener("click", clearCanvas);
 
 
-
 document.getElementById("artworkName").addEventListener("keydown", function (event) {
     if (event.key === "Enter") {
         event.preventDefault(); // prevent form submission or newline
@@ -3880,7 +4062,6 @@ window.addEventListener("focus", fadeInUI);
 
 document.getElementById("footer").innerHTML = document.title;
 
-
 //–––––––––––––––––––
 // INITIALIZE & START
 //–––––––––––––––––––
@@ -3902,3 +4083,10 @@ function renderLoop() {
 }
 
 renderLoop();
+
+
+
+
+
+
+

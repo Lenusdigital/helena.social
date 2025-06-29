@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HP v0.069 (121209 20250626)</title>
+  <title>HP v0.070 (211927 20250628)</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='draw/draw.css') }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -33,6 +33,9 @@
   </div>
 
   <div id="brushSizeSliderContainer">
+
+    <div id="brushSizeDragBar"></div>
+
     <div id="brushSizeToggle">Hide</div>
 
     <div class="slider-group">
@@ -51,9 +54,15 @@
 
 
   <div id="redoUndoButtons">
+
+    <div class="bs" id="saveButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/save-floppy-disk.svg') }}" alt="Save">
+    </div>    
+
     <div class="bs" id="undoButton">
       <img src="{{ url_for('static', filename='draw/images/icons/undo3.svg') }}" alt="Undo">
     </div>
+    
     <div class="bs" id="redoButton">
       <img src="{{ url_for('static', filename='draw/images/icons/redo.svg') }}" alt="Redo">
     </div>
@@ -68,8 +77,9 @@
     </div>
 
     <div class="bs" id="sendToChatButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/share-ios.svg') }}" alt="Clear">
+      <img src="{{ url_for('static', filename='draw/images/icons/chat-round.svg') }}" alt="Clear">
     </div>
+
 
 
   </div>
@@ -103,13 +113,13 @@
 
     <input type="file" id="profileImageInput" accept="image/*" hidden>
 
-    <div class="bs" id="drawProfileButton">Save from Canvas</div>
+    <div class="bs bs-y" id="drawProfileButton">Save from Canvas</div>
 
     <input type="text" id="profileNickname" placeholder="Nickname">
     <input type="email" id="profileEmail" placeholder="Email">
     <textarea id="profileBio" placeholder="Short Bio" rows="3"></textarea>
 
-    <div class="bs" id="saveProfileButton">Save Profile</div>
+    <div class="bs bs-blue" id="saveProfileButton">Save Profile</div>
   </div>
 </div>
 
@@ -163,14 +173,16 @@
       <div class="bs" id="saveCanvasAsIcoButton">
         <img src="{{ url_for('static', filename='draw/images/icons/favicon.svg') }}" alt="Save ICO">
       </div>
-      <div class="bs" id="saveButton">
+
+<!--       <div class="bs" id="saveButton">
         <img src="{{ url_for('static', filename='draw/images/icons/save-floppy-disk.svg') }}" alt="Save">
       </div>
+ -->      
       <div class="bs" id="galleryButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/gallery.svg') }}" alt="Gallery">
+        <img src="{{ url_for('static', filename='draw/images/icons/gallery2.svg') }}" alt="Gallery">
       </div>
       <div class="bs" id="shareButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/share-ios.svg') }}" alt="Share">
+        <img src="{{ url_for('static', filename='draw/images/icons/share.svg') }}" alt="Share">
       </div>
     </div>
   </div>
@@ -220,7 +232,7 @@
   <script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
   <script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
   
-  <script src="{{ url_for('static', filename='draw/draw22.js') }}?v={{ cache_bust() }}"></script>
+  <script src="{{ url_for('static', filename='draw/draw23.js') }}?v={{ cache_bust() }}"></script>
 
 
 </body>
