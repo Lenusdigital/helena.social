@@ -43,6 +43,19 @@ EOL
 chmod 644 $REMOTE_DIR/.env
 EOF
 
+echo "=== Optimizing images in static/ ==="
+ssh -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST << EOF
+cd $REMOTE_DIR
+
+if command -v mogrify >/dev/null 2>&1; then
+    find static/ -type f \\( -iname "*.jpg" -o -iname "*.jpeg" \\) -exec mogrify -strip -quality 85% {} \;
+    find static/ -type f -iname "*.png" -exec mogrify -strip {} \;
+    echo "✅ Image compression done (no blur, no interlace)."
+else
+    echo "⚠️ 'mogrify' not installed. Skipping image compression."
+fi
+EOF
+
 echo "=== Restarting Flask service on remote ==="
 ssh -p $REMOTE_PORT $REMOTE_USER@$REMOTE_HOST "systemctl restart helena_flask && systemctl status helena_flask --no-pager"
 
