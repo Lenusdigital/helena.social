@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HP v0.070 (211927 20250628)</title>
+  <title>HP v0.076 (192949 20250629)</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='draw/draw.css') }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
@@ -18,13 +18,17 @@
   <canvas id="glCanvas"></canvas>
 
 
-<div id="undoMemoryIndicator">Undo Mem: 0 MB</div>
+<!-- <div id="undoMemoryIndicator"></div> -->
 
 
-  <div id="brushContainerWrapper">
-      <div id="brushContainer"></div>
-      <div id="brushContainerToggle">Hide</div>
+<div id="brushContainerWrapper">
+  <div id="brushContainerDragBar">Drag</div> 
+  <div id="brushContainer">
   </div>
+  <div id="brushContainerToggle">Hide</div>
+</div>
+
+
 
 
   <div id="opacitySliderContainer">
@@ -36,7 +40,9 @@
 
     <div id="brushSizeDragBar"></div>
 
-    <div id="brushSizeToggle">Hide</div>
+    <div id="brushSizeToggle">
+      <img src="{{ url_for('static', filename='draw/images/icons/show.svg') }}" alt="Show">      
+    </div>
 
     <div class="slider-group">
       <label for="brushSizeSlider">Brush Size: <span id="brushSizeValue">0.02</span></label>
@@ -98,7 +104,7 @@
 
 <div id="profileSection">
     <div id="profileIconButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/cat.svg') }}" alt="Profile" />
+        <img src="/static/draw/images/icons/cat.svg" alt="Profile" />
     </div>
 </div>
 
@@ -127,7 +133,7 @@
 <!-- Chat Button -->
 <!-- Chat Button with badge -->
 <div id="chatToggleBtn" title="Open Chat" class="chat-toggle-btn">
-    <img src="{{ url_for('static', filename='draw/images/icons/chat-bubble.svg') }}" alt="Chat">
+    <img src="/static/draw/images/icons/chat-bubble.svg" alt="Chat">
     <div id="chatUserBadge" class="chat-user-badge">0</div>
 </div>
 
@@ -232,7 +238,7 @@
   <script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
   <script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
   
-  <script src="{{ url_for('static', filename='draw/draw23.js') }}?v={{ cache_bust() }}"></script>
+  <script src="{{ url_for('static', filename='draw/draw24.js') }}?v={{ cache_bust() }}"></script>
 
 
 </body>

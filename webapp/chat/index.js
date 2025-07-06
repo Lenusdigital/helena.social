@@ -60,9 +60,16 @@ wss.on("connection", (ws) => {
                 return;
             }
 
+
             if (data.type === "set-nickname") {
                 ws.nickname = data.nickname || ws.nickname;
-                ws.profileImage = data.profileImage || "";
+
+                if (data.profileImage && !data.profileImage.startsWith("data:") && !data.profileImage.startsWith("/static/")) {
+                    ws.profileImage = `/static/draw/images/icons/${data.profileImage}`;
+                } else {
+                    ws.profileImage = data.profileImage || "";
+                }
+
 
                 userProfiles.set(ws.id, {
                     nickname: ws.nickname,
@@ -98,6 +105,47 @@ wss.on("connection", (ws) => {
                 broadcastUserList();
                 return;
             }
+
+
+
+            // if (data.type === "set-nickname") {
+            //     ws.nickname = data.nickname || ws.nickname;
+            //     ws.profileImage = data.profileImage || "";
+
+            //     userProfiles.set(ws.id, {
+            //         nickname: ws.nickname,
+            //         profileImage: ws.profileImage
+            //     });
+
+            //     const profileMsg = {
+            //         type: "profile-update",
+            //         clientId: ws.id,
+            //         nickname: ws.nickname,
+            //         profileImage: ws.profileImage,
+            //         timestamp: Date.now()
+            //     };
+
+            //     wss.clients.forEach((client) => {
+            //         if (client.readyState === WebSocket.OPEN) {
+            //             client.send(JSON.stringify(profileMsg));
+            //         }
+            //     });
+
+            //     const joinMsg = {
+            //         type: "system",
+            //         message: `${ws.nickname} joined the chat`,
+            //         timestamp: Date.now()
+            //     };
+
+            //     wss.clients.forEach((client) => {
+            //         if (client.readyState === WebSocket.OPEN) {
+            //             client.send(JSON.stringify(joinMsg));
+            //         }
+            //     });
+
+            //     broadcastUserList();
+            //     return;
+            // }
 
             if (data.type === "text") {
                 const broadcastData = {

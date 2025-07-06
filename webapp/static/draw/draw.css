@@ -53,7 +53,7 @@ canvas {
     padding: 0;
     border-radius: 5px;
     z-index: 100;
-    background: rgba(223,223,223,0.5);
+    background: rgba(255,255,255,1);
     backdrop-filter: blur(12px);
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
     touch-action: none;
@@ -62,8 +62,8 @@ canvas {
 
 
 #brushSizeDragBar {
-  width: 54%;
-  height: 1.2rem;
+  width: 75%;
+  height: 1.35rem;
   cursor: grab;
   font-weight: bold;
   font-size: 11px;
@@ -78,6 +78,7 @@ canvas {
     ),
     rgba(0, 0, 0, 0.08); /* fallback base color */
   color: #333;
+  background: url('/static/draw/images/icons/dragbar1.jpeg') center center / cover no-repeat;
   user-select: none;
   touch-action: none;
   transition: background 0.2s ease-in-out;
@@ -286,7 +287,7 @@ input[type="range"]::-ms-thumb {
 input[type="color" i] {
     width: 38px;
     height: 38px;
-    border: 4px solid rgba(255,255,255,0.25);
+    border: 3px solid rgba(255,255,255,1);
     border-radius: 14px;
     padding: 0rem;
     cursor: pointer;
@@ -335,7 +336,7 @@ input[type="color" i]:hover {
     padding: 0.5rem;
     font-weight: bold;
     font-size: 11px;
-    border-radius: 1rem;
+    border-radius: 1.5rem;
     width: auto;
     transition: all 0.25s ease-in-out;
     pointer-events: all;
@@ -596,10 +597,39 @@ input[type="color" i]:hover {
     padding: 1px; 
     border-radius: 5px;
     user-select: none;
-    box-shadow: 1px 1px 11px 3px #00000008;
+    box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
     text-align: center;
     align-items: center;
+    top:1.75rem;
 }
+
+
+#brushContainerDragBar {
+  width: 32px;
+  height: 1.4rem;
+  cursor: grab;
+  font-weight: bold;
+  font-size: 11px;
+  text-align: center;
+  background: url('/static/draw/images/icons/dragbar1.jpeg') center center / cover no-repeat;
+  color: #333;
+  border-radius: 4px 4px 0 0;
+  user-select: none;
+  touch-action: none;
+  transition: background 0.2s ease-in-out;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: inset 0 -1px 0 rgba(0, 0, 0, 0.15);
+}
+
+#brushContainerDragBar:active {
+  cursor: grabbing;
+  background-color: rgba(0, 0, 0, 0.12); /* subtle darker overlay while dragging */
+}
+
+
+
 
 #artworkName {
   padding: 10px;
@@ -634,19 +664,18 @@ input[type="color" i]:hover {
 }
 
 #footer {
-    position: absolute;
-    z-index: 100000;
-    width: 100%;
+    position: fixed;
+    top: 0.2rem;
+    left: 45%;
+    transform: translateX(-60%);
+    background: #ffffff;
+    color: #000000;
+    padding: 2px 4px;
+    font-size: 8px;
+    border-radius: 4px;
+    opacity: 0.8;
+    z-index: 100;
     pointer-events: none;
-    user-select: none;
-    font-size: 0.38rem;
-    text-align: center;
-    margin-right: 4rem;
-    top: 0;
-    padding: 0.2rem;
-    font-family: sans-serif;
-    letter-spacing: 1px;
-    color: black;
 }
 
 
@@ -693,18 +722,23 @@ input[type="color" i]:hover {
 
 
 #brushSizeToggle {
-  cursor: pointer;
-  font-weight: bold;
-  font-size: 11px;
-  padding: 6px 10px;
-  background-color: #FFEB3B;
-  border-radius: 4px;
-  user-select: none;
-  text-align: center;
-  margin: 0.2rem;
-  position: absolute;
-  right: 0;
-  top: 0;
+    cursor: pointer;
+    font-size: 11px;
+    font-weight: bold;
+    border: 0px solid rgba(0, 0, 0, 0.1);
+    border-radius: 4px;
+    padding: 4px 8px;
+    user-select: none;
+    text-align: center;
+    margin: 0.25rem 0rem;
+    position: absolute;
+    right: 0;
+    top: 0;
+}
+
+.show-icon {
+    width: 22px;
+    height: auto;
 }
 
 
@@ -714,7 +748,7 @@ input[type="color" i]:hover {
     top: 0px;
     left: 0px;
     z-index: 1000;
-    background: rgba(255,255,255,0.8);
+    background: rgba(255,255,255,1);
     border-radius: 6px;
     box-shadow: 1px 1px 11px 3px #00000008;
     padding: 4px;
@@ -728,7 +762,6 @@ input[type="color" i]:hover {
     cursor: pointer;
     font-size: 11px;
     font-weight: bold;
-    background-color: #ffeb3b;
     border: 0px solid rgba(0,0,0,0.1);
     border-radius: 4px;
     padding: 4px 8px;
@@ -1201,22 +1234,83 @@ input[type="color" i]:hover {
 
 
 
-#undoMemoryIndicator {
-
+/*#undoMemoryIndicator {
     position: fixed;
-    top: 1rem;
+    top: 1.5rem;
     left: 45%;
     transform: translateX(-60%);
-    background: #333;
-    color: white;
-    padding: 4px 8px;
-    font-size: 12px;
+    background: #ffffff;
+    color: #000000;
+    padding: 2px 4px;
+    font-size: 8px;
     border-radius: 4px;
     opacity: 0.8;
     z-index: 100;
-    pointer-events: none; 
+    pointer-events: none;
+}
+*/
 
+
+#profileModal textarea,
+#profileModal input[type="text"],
+#profileModal input[type="email"],
+#profileModal input[type="password"] {
+    width: 100%;
+    padding: 0.5rem;
+    border-radius: 5px;
+    border: 1px solid #ccc;
+    font-size: 11px;
+    font-weight: bold;
+    box-sizing: border-box;
+    margin-bottom: 0.5rem;
 }
 
 
+.profile-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+  max-width: 380px;
+  margin: 0 auto;
+}
+
+.form-group {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.profile-input {
+  width: 100%;
+  padding: 0.6em;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+}
+
+.profile-actions {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  margin-top: 1rem;
+  gap: 0.5rem;
+}
+
+.profile-input {
+  width: 100%;
+  padding: 0.6em;
+  font-size: 1rem;
+  border: 1px solid #ccc;
+  border-radius: 0.5rem;
+  box-sizing: border-box;
+  outline: none;
+}
+
+.profile-input:focus {
+  border-color: #888;
+  box-shadow: 0 0 0 2px rgba(0, 226, 255, 0.3); /* match .bs-blue */
+}
 

@@ -169,7 +169,7 @@ h1, h2 {
     display: inline-block;
     width: 180px;
     height: 60px;
-    background-image: url('/static/images/ui/upload.webp');
+    background-image: url('/static/images/ui/upload-n1.jpg');
     background-size: contain;
     background-repeat: no-repeat;
     background-position: center;
@@ -181,7 +181,7 @@ h1, h2 {
 
 
 #customDeleteBtn {
-    background-image: url('/static/images/ui/delete.webp');
+    background-image: url('/static/images/ui/delete-n1.jpg');
 }
 
 .nav-btn {

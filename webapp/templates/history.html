@@ -1,6 +1,7 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
+    <meta charset="UTF-8" />
     <title>Browser History Search</title>
     <style>
         body {
@@ -12,8 +13,32 @@
         .sidebar {
             width: 30%;
             border-right: 1px solid #ccc;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-top {
+            flex-shrink: 0;
             padding: 1rem;
+            border-bottom: 1px solid #ddd;
+            background: #fff;
+            position: sticky;
+            top: 0;
+            z-index: 1;
+        }
+        .sidebar-main {
+            flex: 1;
             overflow-y: auto;
+            padding: 1rem;
+            box-sizing: border-box;
+        }
+        .footer {
+            flex-shrink: 0;
+            padding: 1rem;
+            border-top: 1px solid #ddd;
+            background: #fff;
+            position: sticky;
+            bottom: 0;
+            z-index: 1;
         }
         .content {
             flex: 1;
@@ -25,15 +50,13 @@
             border: none;
         }
         .status {
-            margin-top: 1rem;
+            margin-top: 0.5rem;
             padding: 0.5rem;
             background: #f5f5f5;
             border: 1px solid #ccc;
-            color: #333;
             font-size: 0.8rem;
         }
         .pagination {
-            margin-top: 1rem;
             font-size: 0.8rem;
         }
         .pagination a {
@@ -44,10 +67,9 @@
         .history-list {
             margin-top: 1rem;
         }
-        
         .history-item {
             font-size: 0.75rem;
-            margin-bottom: 0.2rem;
+            margin-bottom: 0.3rem;
             display: flex;
             gap: 0.5rem;
             align-items: center;
@@ -55,12 +77,10 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        
         .history-date {
             color: #666;
             flex-shrink: 0;
         }
-        
         .history-link {
             flex-grow: 1;
             color: blue;
@@ -69,7 +89,6 @@
             text-overflow: ellipsis;
             white-space: nowrap;
         }
-        
         .history-link.active {
             background-color: #e0eaff;
             color: #000;
@@ -77,70 +96,154 @@
             padding: 2px 4px;
             border-radius: 3px;
         }
-
         .history-tab {
             color: #888;
             text-decoration: none;
             font-size: 0.8rem;
             flex-shrink: 0;
         }
+        input, select, button {
+            font-size: 0.8rem;
+            font-family: Avenir, sans-serif;
+            margin-top: 0.3rem;
+            width: 100%;
+            box-sizing: border-box;
+        }
     </style>
 </head>
 <body>
     <div class="sidebar">
-        <form method="GET" action="{{ url_for('history') }}">
-            <input type="text" name="query" placeholder="Search history..." value="{{ query }}" required>
-            <button type="submit">Search</button>
-        </form>
-
-        {% if status %}
-            <div class="status">{{ status }}</div>
-        {% endif %}
-
-        <div class="history-list">
-            {% for item in results %}
-                <div class="history-item">
-                    <span class="history-date">{{ item.date }}</span>
-                    <a href="{{ item.url }}" target="content_frame" class="history-link">{{ item.title or item.url }}</a>
-                    <a href="{{ item.url }}" target="_blank" class="history-tab">| tab</a>
-                </div>
-            {% endfor %}
+        <div class="sidebar-top">
+            <form method="GET" action="{{ url_for('history') }}">
+                <input type="text" name="query" placeholder="Search query..." value="{{ query }}">
+                <input type="text" name="domain" placeholder="Domain filter..." value="{{ domain }}">
+                <input type="date" name="date_from" value="{{ date_from }}">
+                <input type="date" name="date_to" value="{{ date_to }}">
+                <select name="visit_type">
+                    <option value="">All Visit Types</option>
+                    <option value="typed" {% if visit_type == 'typed' %}selected{% endif %}>Typed</option>
+                    <option value="link" {% if visit_type == 'link' %}selected{% endif %}>Link</option>
+                </select>
+                <select name="sort">
+                    <option value="date" {% if sort == 'date' %}selected{% endif %}>Sort by Date</option>
+                    <option value="title" {% if sort == 'title' %}selected{% endif %}>Sort by Title</option>
+                    <option value="url" {% if sort == 'url' %}selected{% endif %}>Sort by URL</option>
+                </select>
+                <button type="submit">Filter</button>
+            </form>
+            {% if status %}
+                <div class="status">{{ status }}</div>
+            {% endif %}
         </div>
 
-        {% if total_pages > 1 %}
-            <div class="pagination">
-                {% if page > 1 %}
-                    <a href="{{ url_for('history', query=query, page=page-1) }}">Previous</a>
-                {% endif %}
-                Page {{ page }} of {{ total_pages }}
-                {% if page < total_pages %}
-                    <a href="{{ url_for('history', query=query, page=page+1) }}">Next</a>
-                {% endif %}
+        <div class="sidebar-main">
+            <div class="history-list">
+                {% for item in results %}
+                    <div class="history-item">
+                        <span class="history-date">{{ item.date }}</span>
+                        <a href="{{ item.url }}" title="{{ item.url }}" target="content_frame" class="history-link">
+                            {{ item.title or item.url|truncate(70) }}
+                        </a>
+                        <a href="{{ item.url }}" title="Open in new tab" target="_blank" class="history-tab">↗</a>
+                    </div>
+                {% endfor %}
             </div>
-        {% endif %}
+        </div>
+
+<!-- INSIDE THE <div class="footer"> block -->
+<div class="footer">
+    {% if total_pages > 1 %}
+        <div class="pagination">
+            {% if page > 1 %}
+                <a href="{{ url_for('history', query=query, domain=domain, date_from=date_from, date_to=date_to, visit_type=visit_type, sort=sort, page=page-1) }}">Previous</a>
+            {% endif %}
+
+            {# Numbered pagination with ellipsis logic #}
+            {% set max_pages_to_show = 7 %}
+            {% set start_page = [1, page - 2]|max %}
+            {% set end_page = [total_pages, start_page + max_pages_to_show - 1]|min %}
+            {% if end_page - start_page < max_pages_to_show %}
+                {% set start_page = [1, end_page - max_pages_to_show + 1]|max %}
+            {% endif %}
+
+            {% if start_page > 1 %}
+                <a href="{{ url_for('history', query=query, domain=domain, date_from=date_from, date_to=date_to, visit_type=visit_type, sort=sort, page=1) }}">1</a>
+                {% if start_page > 2 %}
+                    ...
+                {% endif %}
+            {% endif %}
+
+            {% for p in range(start_page, end_page + 1) %}
+                {% if p == page %}
+                    <strong>{{ p }}</strong>
+                {% else %}
+                    <a href="{{ url_for('history', query=query, domain=domain, date_from=date_from, date_to=date_to, visit_type=visit_type, sort=sort, page=p) }}">{{ p }}</a>
+                {% endif %}
+            {% endfor %}
+
+            {% if end_page < total_pages %}
+                {% if end_page < total_pages - 1 %}
+                    ...
+                {% endif %}
+                <a href="{{ url_for('history', query=query, domain=domain, date_from=date_from, date_to=date_to, visit_type=visit_type, sort=sort, page=total_pages) }}">{{ total_pages }}</a>
+            {% endif %}
+
+            {% if page < total_pages %}
+                <a href="{{ url_for('history', query=query, domain=domain, date_from=date_from, date_to=date_to, visit_type=visit_type, sort=sort, page=page+1) }}">Next</a>
+            {% endif %}
+        </div>
+    {% endif %}
+    <div class="pagination" style="margin-top: 0.5rem;">
+        <a href="{{ url_for('export_history', query=query, sort=sort) }}" target="_blank">Export JSON</a>
+    </div>
+</div>
+
+
+
+        
     </div>
 
     <div class="content">
-        <iframe name="content_frame"></iframe>
+        <iframe name="content_frame" title="Preview pane"></iframe>
     </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function () {
+            const form = document.querySelector('form');
+            const inputs = form.querySelectorAll('input, select');
+
+            inputs.forEach(el => {
+                const event = (el.tagName === 'SELECT' || el.type === 'date') ? 'change' : 'input';
+                el.addEventListener(event, () => {
+                    if (form.requestSubmit) {
+                        form.requestSubmit();
+                    } else {
+                        form.submit();
+                    }
+                });
+            });
+
             const links = document.querySelectorAll('.history-link');
-
             links.forEach(link => {
-                link.addEventListener('click', function (e) {
-                    // Remove 'active' from all links
+                link.addEventListener('click', function () {
                     links.forEach(l => l.classList.remove('active'));
-
-                    // Add 'active' to clicked link
                     this.classList.add('active');
                 });
             });
+
+            let index = 0;
+            const items = [...links];
+
+            window.addEventListener('keydown', e => {
+                if (e.key === 'ArrowDown' || e.key === 'ArrowRight') {
+                    index = (index + 1) % items.length;
+                    items[index].click();
+                } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft') {
+                    index = (index - 1 + items.length) % items.length;
+                    items[index].click();
+                }
+            });
         });
     </script>
-
-
-
 </body>
 </html>

@@ -608,11 +608,12 @@ function createBrushThumbnails() {
 
 function updateBrushThumbnailStyles(activeBrush) {
     const container = document.getElementById("brushContainer");
-    const thumbnails = container.getElementsByTagName("img");
-    for (let i = 0; i < thumbnails.length; i++) {
-        const brushName = brushes[i].name;
-        thumbnails[i].style.border = (brushName === activeBrush) ? "2px solid red" : "2px solid transparent";
-    }
+    const thumbnails = container.querySelectorAll("img.brush-thumbnail");
+    brushes.forEach((brush, i) => {
+        if (thumbnails[i]) {
+            thumbnails[i].style.border = (brush.name === activeBrush) ? "2px solid red" : "2px solid transparent";
+        }
+    });
 }
 
 
@@ -1598,7 +1599,7 @@ function redoStroke() {
         gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
 
         needsRedraw = true;
-        showStatusMessage("Red", "info");
+        showStatusMessage("Redo", "info");
     }
 }
 
@@ -1658,9 +1659,9 @@ function monitorUndoMemory() {
     const mb = estimateUndoMemoryMB();
     const threshold = isMobile() ? 40 : 150;
 
-    const indicator = document.getElementById("undoMemoryIndicator");
+    const indicator = document.getElementById("footer");
     if (indicator) {
-        indicator.textContent = `Undo Mem: ${mb.toFixed(1)} MB`;
+        indicator.textContent = `${mb.toFixed(1)} MB ${document.title}`;
     }
 
     if (mb > threshold && !memoryWarningShown) {
@@ -3664,7 +3665,7 @@ function updateBrushSizeToggleUI() {
 
   if (minimized) {
     brushSizeSliderContainer.classList.add("brush-panel-hidden");
-    brushSizeToggle.textContent = "Sliders";
+    brushSizeToggle.innerHTML = `<img class="show-icon" src="/static/draw/images/icons/hide.svg" alt="Show">`;
 
     const rect = brushSizeSliderContainer.getBoundingClientRect();
     const vw = window.innerWidth;
@@ -3677,7 +3678,7 @@ function updateBrushSizeToggleUI() {
 
   } else {
     brushSizeSliderContainer.classList.add("brush-panel-visible");
-    brushSizeToggle.textContent = "Hide";
+    brushSizeToggle.innerHTML = `<img class="show-icon" src="/static/draw/images/icons/show.svg" alt="Hide">`;;
   }
 }
 
@@ -3703,7 +3704,7 @@ function updateBrushContainerUI() {
   thumbnails.forEach(thumb => {
     thumb.style.display = brushContainerMinimized ? "none" : "inline-block";
   });
-  brushContainerToggle.textContent = brushContainerMinimized ? "Brushes" : "Hide";
+  brushContainerToggle.innerHTML = brushContainerMinimized ? `<img class="show-icon" src="/static/draw/images/icons/hide.svg" alt="Show">` : `<img class="show-icon" src="/static/draw/images/icons/show.svg" alt="Hide">` 
 }
 
 brushContainerToggle.addEventListener("click", () => {
@@ -4111,6 +4112,119 @@ window.addEventListener("focus", fadeInUI);
 
 
 document.getElementById("footer").innerHTML = document.title;
+
+
+
+const panels = [
+{
+  id: "brushSizeSliderContainer",
+  dragBarId: "brushSizeDragBar",
+},
+{
+  id: "brushContainerWrapper",
+  dragBarId: "brushContainerDragBar",
+},
+];
+
+panels.forEach(({ id, dragBarId }) => {
+const panel = document.getElementById(id);
+const dragBar = document.getElementById(dragBarId);
+if (!panel || !dragBar) return;
+
+let offsetX = 0,
+    offsetY = 0,
+    isDragging = false;
+
+// Restore saved position
+const x = localStorage.getItem(`${id}-x`);
+const y = localStorage.getItem(`${id}-y`);
+if (x !== null && y !== null) {
+  panel.style.left = `${x}px`;
+  panel.style.top = `${y}px`;
+  panel.style.bottom = "auto";
+}
+
+dragBar.addEventListener("pointerdown", (e) => {
+  isDragging = true;
+  offsetX = e.clientX - panel.offsetLeft;
+  offsetY = e.clientY - panel.offsetTop;
+  dragBar.setPointerCapture(e.pointerId);
+  dragBar.style.cursor = "grabbing";
+});
+
+dragBar.addEventListener("pointermove", (e) => {
+  if (!isDragging) return;
+  const newX = e.clientX - offsetX;
+  const newY = e.clientY - offsetY;
+  panel.style.left = `${newX}px`;
+  panel.style.top = `${newY}px`;
+  panel.style.bottom = "auto";
+});
+
+dragBar.addEventListener("pointerup", (e) => {
+  isDragging = false;
+  dragBar.releasePointerCapture(e.pointerId);
+  dragBar.style.cursor = "grab";
+  localStorage.setItem(`${id}-x`, panel.offsetLeft);
+  localStorage.setItem(`${id}-y`, panel.offsetTop);
+});
+
+dragBar.addEventListener("pointercancel", () => {
+  isDragging = false;
+  dragBar.style.cursor = "grab";
+});
+});
+
+
+//------------------
+// AI - image2image
+//------------------
+
+function exportCanvasToImage() {
+  const canvas = document.getElementById('glCanvas');
+  if (!canvas) {
+    alert('Canvas not found!');
+    return null;
+  }
+
+  return canvas.toDataURL('image/png'); // Base64 PNG
+}
+
+function sendCanvasToFlaskForAI() {
+  const imageData = exportCanvasToImage();
+  if (!imageData) return;
+
+  fetch('/run_ai_inference', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ image_data: imageData })
+  })
+  .then(res => res.blob())
+  .then(blob => {
+    const previewURL = URL.createObjectURL(blob);
+    const preview = document.createElement('img');
+    preview.src = previewURL;
+    preview.style.position = 'fixed';
+    preview.style.bottom = '10px';
+    preview.style.right = '10px';
+    preview.style.border = '2px solid #ccc';
+    preview.style.maxWidth = '200px';
+    preview.style.zIndex = 9999;
+    document.body.appendChild(preview);
+  })
+  .catch(error => {
+    console.error('Error during AI request:', error);
+    alert('AI request failed.');
+  });
+}
+
+// Example: Bind this to a button like
+// document.getElementById('sendToChatButton').addEventListener('click', sendCanvasToFlaskForAI);
+
+
+
 
 //–––––––––––––––––––
 // INITIALIZE & START
