@@ -29,7 +29,7 @@
 
   const mindarThree = new MindARThree({
     container: document.querySelector("#container"), // DOM container for rendering
-    imageTargetSrc: "minds/butterflies3-small12.mind", // .mind file generated from training images
+    imageTargetSrc: "static/ar/minds/mariostar1make.mind", // .mind file generated from training images
 
     filterMinCF: 0.001,     // Minimum confidence for feature match (0–1, lower = more sensitive)
     filterBeta: 10000,       // Temporal smoothing factor (higher = smoother but slower updates)
@@ -56,8 +56,10 @@
   const modelConfigs = [
 
 
-    { targetIndex: 0, name: `Devil`, url: 'models/devil2.glb', scale: [0.5, 0.5, 0.5], rotation: [Math.PI / 2, 0, 0] },
-    { targetIndex: 1, name: `Butterflies Garden`, url: 'models/12_animated_butterflies.glb', scale: [1, 1, 1], rotation: [Math.PI / 2, 0, 0] }
+    { targetIndex: 0, name: `Tenna`, url: 'static/ar/models/tenna.glb', scale: [0.5, 0.5, 0.5], rotation: [Math.PI / 2, 0, 0] }
+     // deltarune is the best.
+
+    // { targetIndex: 1, name: `Butterflies Garden`, url: 'models/12_animated_butterflies.glb', scale: [1, 1, 1], rotation: [Math.PI / 2, 0, 0] }
 
 
   ];
