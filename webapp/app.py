@@ -771,6 +771,13 @@ def verify_email():
     conn.close()
     return "Email verified successfully!" if updated else "Invalid or expired token.", 400
 
+
+@app.route('/ar')
+def ar_page():
+    return app.send_static_file('ar/index.html')
+
+    
+
 def send_verification_email(to_email, token):
     try:
         link = f"http://localhost:1111/verify_email?token={token}"
