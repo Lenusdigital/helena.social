@@ -20,7 +20,27 @@ canvas {
     max-height: 100vh;
 }
 
-#glCanvas {}
+#canvasWrapper {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  touch-action: none;
+  z-index: 0;
+}
+
+#glCanvas {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  transform-origin: top left;
+}
+
+
 
 /*#brushSizeSliderContainer {
     position: fixed;
@@ -58,6 +78,10 @@ canvas {
     box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
     touch-action: none;
     padding: 0.5rem;
+    padding-bottom: 1rem;
+    border-bottom-left-radius: 1.5rem;
+    border-bottom-right-radius: 1.5rem;
+    transition: all 1s ease-out;
 }
 
 
@@ -107,9 +131,12 @@ canvas {
 }
 
 .brush-panel-hidden {
-  width: 0;
-  padding: 0;
-  gap: 0;
+    width: 0;
+    padding: 0;
+    gap: 0;
+    border-bottom-left-radius: 5px!important;
+    border-bottom-right-radius: 5px!important;
+    padding-bottom: 0.5rem!important;
 }
 
 .brush-panel-visible .slider-group {
@@ -212,7 +239,7 @@ input[type="range"]::-ms-thumb {
     cursor: pointer;
     user-select: none;
     z-index: 200;
-    transition: background 0.15s ease-in-out;
+    transition: all 0.15s ease-in-out;
 }
 
 #brushPanelToggle:hover {
@@ -428,8 +455,9 @@ input[type="color" i]:hover {
 
 .modal-content { padding: 20px; margin: 10% auto; width: 90%; text-align: center; 
     border-radius: 0.2rem;
-    background: rgba(255, 255, 255, 0.9);
+    background: #dbdbdbf2;
     z-index: 1000;
+    box-sizing: border-box;
 }
 
 .close { 
@@ -601,6 +629,9 @@ input[type="color" i]:hover {
     text-align: center;
     align-items: center;
     top:1.75rem;
+    border-bottom-left-radius: 1.5rem;
+    border-bottom-right-radius: 1.5rem;
+    transition: all 0.15s ease-in-out;    
 }
 
 
@@ -769,6 +800,8 @@ input[type="color" i]:hover {
     text-align: center;
     user-select: none;
     transition: background 0.15s ease-in-out;
+    border-bottom-left-radius: 1.5rem;
+    border-bottom-right-radius: 1.5rem;      
 }
 
 #brushContainerToggle:hover {
@@ -901,7 +934,7 @@ input[type="color" i]:hover {
     max-width: 480px; 
     text-align: center; 
     border-radius: 0.5rem;
-    background: rgba(255, 255, 255, 0.95);
+    background: #dbdbdbf2;
     z-index: 1000;
     box-shadow: 0 4px 16px rgba(0,0,0,0.25);
 }
@@ -1313,4 +1346,29 @@ input[type="color" i]:hover {
   border-color: #888;
   box-shadow: 0 0 0 2px rgba(0, 226, 255, 0.3); /* match .bs-blue */
 }
+
+
+.save-modal-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.save-modal-content h2 {
+  margin: 0.5rem 0;
+}
+
+.save-modal-content input[type="text"] {
+  width: 100%;
+  max-width: 300px;
+}
+
+.save-buttons {
+  display: flex;
+  gap: 1rem;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+
 

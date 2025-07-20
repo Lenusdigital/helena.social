@@ -27,9 +27,38 @@
   const clock = new THREE.Clock();
   const mixers = [];
 
+
+  const audioBufferCache = {};
+
+async function playSound(url, loop = true) {
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === 'suspended') await audioCtx.resume();
+
+  try {
+    let buffer = audioBufferCache[url];
+    if (!buffer) {
+      const res = await fetch(url);
+      const arrayBuffer = await res.arrayBuffer();
+      buffer = await audioCtx.decodeAudioData(arrayBuffer);
+      audioBufferCache[url] = buffer;
+    }
+    const source = audioCtx.createBufferSource();
+    source.buffer = buffer;
+    source.loop = loop;
+    source.connect(audioCtx.destination);
+    source.start();
+    return source;
+  } catch (err) {
+    console.error(`[Audio] Error playing ${url}:`, err);
+    return null;
+  }
+}
+
+
+
   const mindarThree = new MindARThree({
     container: document.querySelector("#container"), // DOM container for rendering
-    imageTargetSrc: "static/ar/minds/mariostar1make.mind", // .mind file generated from training images
+    imageTargetSrc: "static/ar/minds/mariostar1maker.mind", // .mind file generated from training images
 
     filterMinCF: 0.001,     // Minimum confidence for feature match (0–1, lower = more sensitive)
     filterBeta: 10000,       // Temporal smoothing factor (higher = smoother but slower updates)
@@ -56,7 +85,7 @@
   const modelConfigs = [
 
 
-    { targetIndex: 0, name: `Tenna`, url: 'static/ar/models/tenna.glb', scale: [0.5, 0.5, 0.5], rotation: [Math.PI / 2, 0, 0] }
+    { targetIndex: 0, name: `Tenna`, url: 'static/ar/models/tenna-c.glb', scale: [0.5, 0.5, 0.5], rotation: [Math.PI / 2, 0, 0], audio:"static/ar/audio/bigshot-loop.mp3" }
      // deltarune is the best.
 
     // { targetIndex: 1, name: `Butterflies Garden`, url: 'models/12_animated_butterflies.glb', scale: [1, 1, 1], rotation: [Math.PI / 2, 0, 0] }
@@ -171,13 +200,44 @@ function logDev(message, important = false) {
     );
   }
 
+  // const loader = new GLTFLoader();
+  import { DRACOLoader } from 'three/addons/loaders/DRACOLoader.js';
+
+  const dracoLoader = new DRACOLoader();
+  dracoLoader.setDecoderPath('https://www.gstatic.com/draco/v1/decoders/');
+
   const loader = new GLTFLoader();
+  loader.setDRACOLoader(dracoLoader);
+  
+
+
+
   const loadingPromises = [];
 
   modelConfigs.forEach(config => {
 
 
 const anchor = mindarThree.addAnchor(config.targetIndex);
+
+
+anchor.onTargetFound = () => {
+  if (config.audio && !anchor.userData.audioPlaying) {
+    playSound(config.audio).then(source => {
+      anchor.userData.audioSource = source;
+      anchor.userData.audioPlaying = true;
+    });
+  }
+};
+
+anchor.onTargetLost = () => {
+  if (anchor.userData.audioPlaying && anchor.userData.audioSource) {
+    try { anchor.userData.audioSource.stop(); } catch {}
+    anchor.userData.audioSource.disconnect();
+    anchor.userData.audioPlaying = false;
+    anchor.userData.audioSource = null;
+  }
+};
+
 
 const labelDiv = document.createElement('div');
 labelDiv.className = 'label';
@@ -237,6 +297,7 @@ try {
 
 
     loader.load(config.url, (gltf) => {
+
       logDev(`Loaded model: ${config.name} (anchor ${config.targetIndex})`, true);
 
       const model = gltf.scene;
@@ -273,6 +334,14 @@ try {
         fadeTarget: 0,
         orbitingCubes
       };
+
+
+    // Add audio playback setup here
+    if (config.audio) {
+      anchor.userData.audioPath = config.audio;
+      anchor.userData.audioSource = null;
+      anchor.userData.audioPlaying = false;
+    }      
 
       resolve();
     }, undefined, (error) => {
@@ -334,6 +403,9 @@ const startRendering = () => {
           state.found = true;
           updateTreasureListUI();
           playBlip();
+
+          const config = modelConfigs.find(c => c.targetIndex === index);
+
         }
         console.log(`Anchor ${index} RELATIVE pos=(${px},${py},${pz}) rot=(${rx},${ry},${rz})`);
       }
@@ -349,6 +421,10 @@ const startRendering = () => {
     mindarThree.anchors.forEach(anchor => {
       const data = anchor.userData;
       if (!data?.model) return;
+
+
+
+
 
       const targetOpacity = anchor.group.visible ? 1 : 0;
       data.fadeTarget = targetOpacity;

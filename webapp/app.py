@@ -797,7 +797,26 @@ def send_verification_email(to_email, token):
 
 
 
+def generate_temp_ssl_cert():
+    ssl_dir = "/tmp/ssl"
+    os.makedirs(ssl_dir, exist_ok=True)
+    cert_file = os.path.join(ssl_dir, "server.crt")
+    key_file = os.path.join(ssl_dir, "server.key")
+
+    if not os.path.exists(cert_file) or not os.path.exists(key_file):
+        subprocess.run([
+            "openssl", "req", "-new", "-newkey", "rsa:2048", "-days", "1", "-nodes", "-x509",
+            "-keyout", key_file,
+            "-out", cert_file,
+            "-subj", "/C=US/ST=Denial/L=Springfield/O=Dis/CN=localhost"
+        ], check=True)
+    
+    return cert_file, key_file
 
 
 if __name__ == '__main__':
-    app.run(debug=True, host='0.0.0.0', port=1111)
+    cert, key = generate_temp_ssl_cert()
+    app.run(debug=True, host='0.0.0.0', port=1111, ssl_context=(cert, key))
+
+# if __name__ == '__main__':
+#     app.run(debug=True, host='0.0.0.0', port=1111)

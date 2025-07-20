@@ -3,10 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HP v0.076 (192949 20250629)</title>
+  <title>HP v0.094 (101810 20250709)</title>
 
   <link rel="stylesheet" href="{{ url_for('static', filename='draw/draw.css') }}">
-  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='favicon.ico') }}">
+  <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='draw/favicon.ico') }}">
 
   <script defer src="https://analytics.mielniczuk.com/script.js"
           data-website-id="30de2863-e3bd-4584-9314-e254da2c6aca"
@@ -15,7 +15,12 @@
 </head>
 
 <body>
+
+<div id="canvasWrapper">
   <canvas id="glCanvas"></canvas>
+</div>
+
+
 
 
 <!-- <div id="undoMemoryIndicator"></div> -->
@@ -193,16 +198,19 @@
     </div>
   </div>
 
-  <div class="modal" id="saveModal">
-    <div class="modal-content">
-      <span class="close">×</span>
+  <div id="saveModal" class="modal">
+    <div class="modal-content save-modal-content">
+      <span class="close" id="closeSaveModal">×</span>
       <h2>Save Artwork</h2>
-      <input type="text" id="artworkName" placeholder="Enter artwork name">
-      <input type="hidden" id="existingArtworkId">
-      <div class="bs" id="saveNewButton">Save as New</div>
-      <div class="bs" id="overwriteButton">Overwrite</div>
+      <input type="text" id="artworkName" placeholder="Enter artwork name" />
+      <input type="hidden" id="existingArtworkId" />
+      <div class="save-buttons">
+        <div class="bs" id="saveNewButton">Save as New</div>
+        <div class="bs" id="overwriteButton">Overwrite</div>
+      </div>
     </div>
   </div>
+
 
 
   <div id="galleryModal" class="modal">
@@ -230,6 +238,28 @@
   </div>
 
 
+  <div id="exportOptionsModal" class="modal">
+    <div class="modal-content">
+      <span id="exportModalClose" class="close">×</span>
+      <h3>Export PNG</h3>
+      <p>Choose export type:</p>
+      <button id="exportWithBackgroundBtn" class="bs">With Background</button>
+      <button id="exportTransparentBtn" class="bs">Transparent</button>
+    </div>
+  </div>
+
+
+<div id="shareOptionsModal" class="modal">
+  <div class="modal-content">
+    <span id="shareModalClose" class="close" onclick="closeShareOptionsModal()">×</span>
+    <h3>Share Artwork</h3>
+    <p>Choose what to share:</p>
+    <button id="shareWithBackgroundBtn" class="bs">With Background</button>
+    <button id="shareTransparentBtn" class="bs">Transparent</button>
+  </div>
+</div>
+
+
   <div id="footer"></div>
 
 
@@ -238,7 +268,7 @@
   <script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
   <script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
   
-  <script src="{{ url_for('static', filename='draw/draw24.js') }}?v={{ cache_bust() }}"></script>
+  <script src="{{ url_for('static', filename='draw/draw25.js') }}?v={{ cache_bust() }}"></script>
 
 
 </body>

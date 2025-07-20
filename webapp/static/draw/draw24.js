@@ -6,6 +6,127 @@ function isMobile() {
 
 const canvas = document.getElementById("glCanvas");
 
+
+/*
+
+    Zooming canvas
+
+*/
+
+
+
+let lastX = null,
+    lastY = null;
+let zoomScale = 1;
+let panX = 0;
+let panY = 0;
+let zoomMin = 0.2;
+let zoomMax = 5;
+let lastTouchDist = null;
+let lastTouchMidpoint = null;
+let isPanning = false;
+
+const canvasWrapper = document.getElementById("canvasWrapper") || canvas.parentElement;
+canvas.style.transformOrigin = "top left";
+
+// Helper functions
+function getMidpoint(t1, t2) {
+    return {
+        x: (t1.clientX + t2.clientX) / 2,
+        y: (t1.clientY + t2.clientY) / 2
+    };
+}
+function getDistance(t1, t2) {
+    const dx = t1.clientX - t2.clientX;
+    const dy = t1.clientY - t2.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+}
+
+function updateCanvasTransform() {
+    canvas.style.transform = `translate(${panX}px, ${panY}px) scale(${zoomScale})`;
+    canvas.style.transformOrigin = "top left";
+}
+
+// Desktop zoom with mouse wheel
+canvasWrapper.addEventListener("wheel", (e) => {
+    if (e.ctrlKey || e.metaKey) return;
+    e.preventDefault();
+
+    const wrapperRect = canvasWrapper.getBoundingClientRect();
+    const pointerX = e.clientX - wrapperRect.left;
+    const pointerY = e.clientY - wrapperRect.top;
+
+    const worldX = (pointerX - panX) / zoomScale;
+    const worldY = (pointerY - panY) / zoomScale;
+
+    const delta = -e.deltaY * 0.001;
+    const newScale = Math.min(Math.max(zoomScale + delta, zoomMin), zoomMax);
+    const scaleChange = newScale / zoomScale;
+
+    panX -= worldX * (scaleChange - 1) * zoomScale;
+    panY -= worldY * (scaleChange - 1) * zoomScale;
+
+    zoomScale = newScale;
+    updateCanvasTransform();
+}, { passive: false });
+
+// Mobile: pinch to zoom & pan
+canvasWrapper.addEventListener("touchstart", (e) => {
+    if (e.touches.length === 2) {
+        isPanning = true;
+        lastTouchDist = getDistance(e.touches[0], e.touches[1]);
+        lastTouchMidpoint = getMidpoint(e.touches[0], e.touches[1]);
+    }
+}, { passive: false });
+
+canvasWrapper.addEventListener("touchmove", (e) => {
+    if (e.touches.length === 2) {
+        e.preventDefault();
+        isDrawing = false;
+
+        const newDist = getDistance(e.touches[0], e.touches[1]);
+        const newMid = getMidpoint(e.touches[0], e.touches[1]);
+
+        const wrapperRect = canvasWrapper.getBoundingClientRect();
+        const pointerX = newMid.x - wrapperRect.left;
+        const pointerY = newMid.y - wrapperRect.top;
+
+        const worldX = (pointerX - panX) / zoomScale;
+        const worldY = (pointerY - panY) / zoomScale;
+
+        const delta = (newDist - lastTouchDist) * 0.01;
+        const newScale = Math.min(Math.max(zoomScale + delta, zoomMin), zoomMax);
+        const scaleChange = newScale / zoomScale;
+
+        panX -= worldX * (scaleChange - 1) * zoomScale;
+        panY -= worldY * (scaleChange - 1) * zoomScale;
+
+        panX += (newMid.x - lastTouchMidpoint.x);
+        panY += (newMid.y - lastTouchMidpoint.y);
+
+        zoomScale = newScale;
+        updateCanvasTransform();
+
+        lastTouchDist = newDist;
+        lastTouchMidpoint = newMid;
+    }
+}, { passive: false });
+
+canvasWrapper.addEventListener("touchend", (e) => {
+    if (e.touches.length < 2) {
+        lastTouchDist = null;
+        lastTouchMidpoint = null;
+        isPanning = false;
+    }
+}, { passive: false });
+
+
+
+
+
+
+
+
 const gl = canvas.getContext("webgl2", { 
     alpha: true, 
     powerPreference: "high-performance" 
@@ -1467,8 +1588,9 @@ function flattenStrokes() {
 // Draw a brush stroke into the persistent paint layer (offscreen).
 // x and y are in pixel coordinates (with (0,0) at top left).
 
-let lastX = null,
-    lastY = null;
+// let lastX = null,
+//     lastY = null;
+
 let currentAngle = 0;
 
 
@@ -2845,7 +2967,89 @@ document.getElementById("saveCanvasAsIcoButton").addEventListener("click", saveC
     }
 
     // Add an event listener to the save button
-    document.getElementById("saveCanvasButton").addEventListener("click", saveCanvasAsPNG);
+    
+
+
+
+//---------------
+// Export PNG Modal (Proper FBO Composition + Filename + Flip)
+//---------------
+
+function openExportModal() {
+    document.getElementById("exportOptionsModal").style.display = "flex";
+}
+
+function closeExportModal() {
+    document.getElementById("exportOptionsModal").style.display = "none";
+}
+
+function exportWithBackground() {
+    closeExportModal();
+    exportDrawingWithModal(true);
+}
+
+function exportTransparent() {
+    closeExportModal();
+    exportDrawingWithModal(false);
+}
+
+function exportDrawingWithModal(includeBackground) {
+    const offscreenCanvas = document.createElement("canvas");
+    offscreenCanvas.width = fixedFBOWidth;
+    offscreenCanvas.height = fixedFBOHeight;
+    const offscreenCtx = offscreenCanvas.getContext("2d");
+
+    // Step 1: optionally draw background
+    if (includeBackground && currentImage) {
+        offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+    }
+
+    // Step 2: read paint FBO pixels
+    const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+    gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    // Step 3: create temp canvas for paint
+    const tempCanvas = document.createElement("canvas");
+    tempCanvas.width = fixedFBOWidth;
+    tempCanvas.height = fixedFBOHeight;
+    const tempCtx = tempCanvas.getContext("2d");
+
+    const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
+    tempCtx.putImageData(imageData, 0, 0);
+
+    // Step 4: flip & draw paint onto offscreen canvas
+    offscreenCtx.save();
+    offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
+    offscreenCtx.scale(-1, -1);
+    offscreenCtx.rotate(Math.PI);
+    offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
+    offscreenCtx.restore();
+
+    // Step 5: export PNG with timestamp-based filename
+    const link = document.createElement("a");
+    const suffix = includeBackground ? "_with_background" : "_transparent";
+    link.download = `canvas_${Date.now()}${suffix}.png`;
+    link.href = offscreenCanvas.toDataURL("image/png");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+document.getElementById("exportModalClose").addEventListener("click", closeExportModal);
+document.getElementById("exportWithBackgroundBtn").addEventListener("click", exportWithBackground);
+document.getElementById("exportTransparentBtn").addEventListener("click", exportTransparent);
+document.getElementById("saveCanvasButton").addEventListener("click", openExportModal);
+
+
+// old
+//document.getElementById("saveCanvasButton").addEventListener("click", saveCanvasAsPNG);
+
+
+
+
+
 
 
 
@@ -4222,6 +4426,76 @@ function sendCanvasToFlaskForAI() {
 
 // Example: Bind this to a button like
 // document.getElementById('sendToChatButton').addEventListener('click', sendCanvasToFlaskForAI);
+
+
+
+
+
+// document.getElementById("saveCanvasButton").addEventListener("click", openExportModal);
+
+// function openExportModal() {
+//     document.getElementById("exportOptionsModal").style.display = "flex";
+// }
+
+// function closeExportModal() {
+//     document.getElementById("exportOptionsModal").style.display = "none";
+// }
+
+// function exportWithBackground() {
+//     closeExportModal();
+//     exportDrawing(true);
+// }
+
+// function exportTransparent() {
+//     closeExportModal();
+//     exportDrawing(false);
+// }
+
+// function exportDrawing(includeBackground) {
+//     const width = gl.drawingBufferWidth;
+//     const height = gl.drawingBufferHeight;
+
+//     const exportCanvas = document.createElement("canvas");
+//     exportCanvas.width = width;
+//     exportCanvas.height = height;
+//     const exportCtx = exportCanvas.getContext("2d");
+
+//     // Step 1: draw currentImage if requested
+//     if (includeBackground && currentImage) {
+//         exportCtx.drawImage(currentImage, 0, 0, width, height);
+//     }
+
+//     // Step 2: read from paintFBO (contains strokes)
+//     const pixels = new Uint8Array(width * height * 4);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+//     gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+//     // Step 3: flip Y (WebGL's origin is bottom-left)
+//     const flipped = new Uint8ClampedArray(pixels.length);
+//     const rowSize = width * 4;
+//     for (let y = 0; y < height; y++) {
+//         const src = y * rowSize;
+//         const dst = (height - y - 1) * rowSize;
+//         flipped.set(pixels.subarray(src, src + rowSize), dst);
+//     }
+
+//     // Step 4: draw paint layer on top
+//     const imageData = new ImageData(flipped, width, height);
+//     exportCtx.putImageData(imageData, 0, 0);
+
+//     // Step 5: export as PNG
+//     const link = document.createElement("a");
+//     link.download = includeBackground ? "drawing_with_background.png" : "drawing_transparent.png";
+//     link.href = exportCanvas.toDataURL("image/png");
+//     link.click();
+// }
+
+
+
+
+
+
 
 
 
