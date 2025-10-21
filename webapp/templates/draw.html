@@ -3,29 +3,55 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>HP v0.094 (101810 20250709)</title>
-
+  <title>HP v0.144 (190910 20251021)</title>
   <link rel="stylesheet" href="{{ url_for('static', filename='draw/draw.css') }}">
   <link rel="icon" type="image/x-icon" href="{{ url_for('static', filename='draw/favicon.ico') }}">
-
   <script defer src="https://analytics.mielniczuk.com/script.js"
-          data-website-id="30de2863-e3bd-4584-9314-e254da2c6aca"
-          onerror="console.error('Tracking script failed to load');">
-  </script>
+  data-website-id="30de2863-e3bd-4584-9314-e254da2c6aca"
+  onerror="console.error('Tracking script failed to load');">
+</script>
 </head>
-
 <body>
+  <div id="canvasWrapper">
+    <canvas id="glCanvas"></canvas>
+  </div>
 
-<div id="canvasWrapper">
-  <canvas id="glCanvas"></canvas>
+
+  <div class="bs" id="hideAllButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/show.svg') }}" alt="Hide All">
+  </div>
+
+<!-- Layers Panel -->
+
+<div id="layersPanel" class="layers-panel">
+
+  <div id="layersPanelDragBar" class="layers-dragbar no-select" title="Drag">
+    <div class="layers-dragbar-grip"> </div>
+  </div>
+
+  <button id="layersPanelToggle" class="icon-btn-2" title="Show/Hide list">
+    <img class="show-icon" src="/static/draw/images/icons/show.svg" alt="Hide">
+  </button>
+
+
+  <!-- Scrollable list body -->
+  <div id="layersList" class="layers-list"></div>
+
+  <div id="layersActions" class="layers-actions">
+    <button id="addLayerBtn" class="icon-btn bs-n" title="Add layer">Add</button>
+    <button id="removeLayerBtn" class="icon-btn bs-n" title="Remove selected layer">Del</button>
+    <button id="importLayerButton" class="icon-btn bs-n" type="button" title="Import image as layer">Imp</button>
+    <input id="importLayerInput" type="file" accept="image/*" capture="environment" style="display:none" />
+    <button id="exportLayerButton" class="icon-btn bs-n" type="button" title="Export active layer as PNG">Exp</button>
+    <button id="layerToBrushBtn" class="icon-btn bs-n" title="Add layer">Brush</button>
+  </div>
+
+  
 </div>
 
 
 
-
 <!-- <div id="undoMemoryIndicator"></div> -->
-
-
 <div id="brushContainerWrapper">
   <div id="brushContainerDragBar">Drag</div> 
   <div id="brushContainer">
@@ -33,222 +59,188 @@
   <div id="brushContainerToggle">Hide</div>
 </div>
 
-
-
-
-  <div id="opacitySliderContainer">
-    <label for="opacitySlider">Opacity</label>
-    <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="1">
-  </div>
-
-  <div id="brushSizeSliderContainer">
-
-    <div id="brushSizeDragBar"></div>
-
-    <div id="brushSizeToggle">
-      <img src="{{ url_for('static', filename='draw/images/icons/show.svg') }}" alt="Show">      
-    </div>
-
-    <div class="slider-group">
-      <label for="brushSizeSlider">Brush Size: <span id="brushSizeValue">0.02</span></label>
-      <input type="range" id="brushSizeSlider" min="0.01" max="1" step="0.01" value="0.02">
-    </div>
-    <div class="slider-group">
-      <label for="eraseStrengthSlider">Eraser Strength: <span id="eraseStrengthValue">0.50</span></label>
-      <input type="range" id="eraseStrengthSlider" min="0" max="1" step="0.01" value="0.50">
-    </div>
-    <div class="slider-group">
-      <label for="paintStrengthSlider">Paint Strength: <span id="paintStrengthValue">0.50</span></label>
-      <input type="range" id="paintStrengthSlider" min="0" max="1" step="0.01" value="0.50">
-    </div>
-  </div>
-
-
-  <div id="redoUndoButtons">
-
-    <div class="bs" id="saveButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/save-floppy-disk.svg') }}" alt="Save">
-    </div>    
-
-    <div class="bs" id="undoButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/undo3.svg') }}" alt="Undo">
-    </div>
-    
-    <div class="bs" id="redoButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/redo.svg') }}" alt="Redo">
-    </div>
-
-    <div class="bs" id="cleanButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/edit-clear-history.svg') }}" alt="Clear">
-    </div>
-
-    <div class="bs" id="eraserToggle">
-      <img src="{{ url_for('static', filename='draw/images/icons/eraser.svg') }}" alt="Erase">
-      <img src="{{ url_for('static', filename='draw/images/icons/brush.svg') }}" alt="Brush" style="display: none;">
-    </div>
-
-    <div class="bs" id="sendToChatButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/chat-round.svg') }}" alt="Clear">
-    </div>
-
-
-
-  </div>
-
-  <div id="colorsContainer">
-    <div id="colorPickerContainer">
-      <input type="color" id="colorPicker" value="#000000">
-    </div>
-    <div id="colorPalette">
-      <div class="indicator"></div>
-    </div>
-    <div id="lightnessPalette">
-      <div class="indicator"></div>
-    </div>
-  </div>
-
-<div id="profileSection">
-    <div id="profileIconButton">
-        <img src="/static/draw/images/icons/cat.svg" alt="Profile" />
-    </div>
+<div id="opacitySliderContainer">
+  <label for="opacitySlider">Opacity</label>
+  <input type="range" id="opacitySlider" min="0" max="1" step="0.01" value="1">
 </div>
+<div id="brushSizeSliderContainer">
+  <div id="brushSizeDragBar"></div>
+  <div id="brushSizeToggle">
+    <img src="{{ url_for('static', filename='draw/images/icons/show.svg') }}" alt="Show">      
+  </div>
+  <div class="slider-group">
+    <label for="brushSizeSlider">Brush Size: <span id="brushSizeValue">0.02</span></label>
+    <input type="range" id="brushSizeSlider" min="0.01" max="1" step="0.01" value="0.02">
+  </div>
+  <div class="slider-group">
+    <label for="eraseStrengthSlider">Eraser Strength: <span id="eraseStrengthValue">0.50</span></label>
+    <input type="range" id="eraseStrengthSlider" min="0" max="1" step="0.01" value="0.50">
+  </div>
+  <div class="slider-group">
+    <label for="paintStrengthSlider">Paint Strength: <span id="paintStrengthValue">0.50</span></label>
+    <input type="range" id="paintStrengthSlider" min="0" max="1" step="0.01" value="0.50">
+  </div>
+</div>
+<div id="redoUndoButtons">
+  <div class="bs" id="resetViewBtn">
+    <img src="{{ url_for('static', filename='draw/images/icons/fit.svg') }}" alt="Reset view">
+  </div>  
+  <div class="bs" id="saveButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/save-floppy-disk.svg') }}" alt="Save">
+  </div>    
+  <div class="bs" id="undoButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/undo3.svg') }}" alt="Undo">
+  </div>
+  <div class="bs" id="redoButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/redo.svg') }}" alt="Redo">
+  </div>
+  <div class="bs" id="cleanButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/edit-clear-history.svg') }}" alt="Clear">
+  </div>
+  <div class="bs" id="eraserToggle">
+    <img src="{{ url_for('static', filename='draw/images/icons/eraser.svg') }}" alt="Erase">
+    <img src="{{ url_for('static', filename='draw/images/icons/brush.svg') }}" alt="Brush" style="display: none;">
+  </div>
 
+  <div class="bs" id="sendToChatButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/chat-round.svg') }}" alt="Send To Chat">
+  </div>
+
+
+
+
+</div>
+<div id="colorsContainer">
+  <div id="colorPickerContainer">
+    <input type="color" id="colorPicker" value="#000000">
+  </div>
+  <div id="colorPalette">
+    <div class="indicator"></div>
+  </div>
+  <div id="lightnessPalette">
+    <div class="indicator"></div>
+  </div>
+</div>
+<div id="profileSection">
+  <div id="profileIconButton">
+    <img src="/static/draw/images/icons/cat.svg" alt="Profile" />
+  </div>
+</div>
 <div id="profileModal" class="modal">
   <div class="modal-content">
     <span class="close">×</span>
     <h2>Edit Profile</h2>
-
     <div id="profileImagePreviewContainer">
       <div id="profileImagePreview"></div>
     </div>
-
     <input type="file" id="profileImageInput" accept="image/*" hidden>
-
     <div class="bs bs-y" id="drawProfileButton">Save from Canvas</div>
-
     <input type="text" id="profileNickname" placeholder="Nickname">
     <input type="email" id="profileEmail" placeholder="Email">
     <textarea id="profileBio" placeholder="Short Bio" rows="3"></textarea>
-
     <div class="bs bs-blue" id="saveProfileButton">Save Profile</div>
   </div>
 </div>
-
-
 <!-- Chat Button -->
 <!-- Chat Button with badge -->
 <div id="chatToggleBtn" title="Open Chat" class="chat-toggle-btn">
-    <img src="/static/draw/images/icons/chat-bubble.svg" alt="Chat">
-    <div id="chatUserBadge" class="chat-user-badge">0</div>
+  <img src="/static/draw/images/icons/chat-bubble.svg" alt="Chat">
+  <div id="chatUserBadge" class="chat-user-badge">0</div>
 </div>
-
-
 <!-- Chat Overlay -->
 <div id="chatOverlay" class="chat-overlay hidden">
-  
-    <div class="chat-header">
-        <span>Chat Room</span>
-        <span id="chatCloseBtn" class="chat-close-btn close">×</span>
-    </div>
-
-    <!-- Connected Users -->
-    <div id="chatUsers" class="chat-users">
-        <!-- User avatars will appear here -->
-    </div>
-
-    <!-- Chat Messages -->
-    <div id="chatMessages" class="chat-messages"></div>
-
-    <!-- Chat Input -->
-    <div class="chat-input-area">
-        <input type="text" id="chatInput" placeholder="Type your message..." />
-        <button id="chatSendBtn">Send</button>
-    </div>
+  <div class="chat-header">
+    <span>Chat Room</span>
+    <span id="chatCloseBtn" class="chat-close-btn close">×</span>
+  </div>
+  <!-- Connected Users -->
+  <div id="chatUsers" class="chat-users">
+    <!-- User avatars will appear here -->
+  </div>
+  <!-- Chat Messages -->
+  <div id="chatMessages" class="chat-messages"></div>
+  <!-- Chat Input -->
+  <div class="chat-input-area">
+    <input type="text" id="chatInput" placeholder="Type your message..." />
+    <button id="chatSendBtn">Send</button>
+  </div>
 </div>
-
-
-
-  <div id="saveGalleryButtons">
-    <div class="bs" id="menuButton">
-      <img src="{{ url_for('static', filename='draw/images/icons/menu.svg') }}" alt="Menu">
+<div id="saveGalleryButtons">
+  <div class="bs" id="menuButton">
+    <img src="{{ url_for('static', filename='draw/images/icons/menu.svg') }}" alt="Menu">
+  </div>
+  <div class="menuButtons">
+    <div class="bs" id="imageLoaderButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/camera-add.svg') }}" alt="Photo">
     </div>
-    <div class="menuButtons">
-      <div class="bs" id="imageLoaderButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/camera-add.svg') }}" alt="Photo">
-      </div>
-      <input type="file" id="imageLoader" accept="image/*" capture="environment"
-             style="width:0; height:0; opacity:0; position:absolute;">
-      <div class="bs" id="saveCanvasButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/png.svg') }}" alt="Save PNG">
-      </div>
-      <div class="bs" id="saveCanvasAsIcoButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/favicon.svg') }}" alt="Save ICO">
-      </div>
-
+    <input type="file" id="imageLoader" accept="image/*" capture="environment"
+    style="width:0; height:0; opacity:0; position:absolute;">
+    <div class="bs" id="saveCanvasButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/png.svg') }}" alt="Save PNG">
+    </div>
+    <div class="bs" id="saveCanvasAsIcoButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/favicon.svg') }}" alt="Save ICO">
+    </div>
 <!--       <div class="bs" id="saveButton">
         <img src="{{ url_for('static', filename='draw/images/icons/save-floppy-disk.svg') }}" alt="Save">
       </div>
- -->      
-      <div class="bs" id="galleryButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/gallery2.svg') }}" alt="Gallery">
-      </div>
-      <div class="bs" id="shareButton">
-        <img src="{{ url_for('static', filename='draw/images/icons/share.svg') }}" alt="Share">
-      </div>
+    -->      
+    <div class="bs" id="galleryButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/gallery2.svg') }}" alt="Gallery">
+    </div>
+    <div class="bs" id="shareButton">
+      <img src="{{ url_for('static', filename='draw/images/icons/share.svg') }}" alt="Share">
     </div>
   </div>
+</div>
 
-  <div id="saveModal" class="modal">
-    <div class="modal-content save-modal-content">
-      <span class="close" id="closeSaveModal">×</span>
-      <h2>Save Artwork</h2>
-      <input type="text" id="artworkName" placeholder="Enter artwork name" />
-      <input type="hidden" id="existingArtworkId" />
-      <div class="save-buttons">
-        <div class="bs" id="saveNewButton">Save as New</div>
-        <div class="bs" id="overwriteButton">Overwrite</div>
-      </div>
+
+<input id="importProjectInput" type="file" accept=".hpaint,.zip" style="display:none">
+
+<div id="saveModal" class="modal">
+  <div class="modal-content save-modal-content">
+    <span class="close" id="closeSaveModal">×</span>
+    <h2>Save Artwork</h2>
+    <input type="text" id="artworkName" placeholder="Enter artwork name" />
+    <input type="hidden" id="existingArtworkId" />
+    <div class="save-buttons">
+      <div class="bs" id="saveNewButton">Save as New</div>
+      <div class="bs" id="overwriteButton">Overwrite</div>
+      <div class="bs" id="importProjectBtn">Import</div>      
+      <div class="bs" id="exportProjectBtn">Export</div>      
     </div>
   </div>
+</div>
 
-
-
-  <div id="galleryModal" class="modal">
-    <div class="modal-content">
-      <span class="close">&times;</span>
-
-      <div id="galleryHeader" style="display: flex; align-items: center; justify-content: center; position: relative;">
-          <button id="galleryEditButton" class="bs" style="position: absolute; left: 0;">Edit</button>
-          <h2 style="margin: 0;">Gallery</h2>
-      </div>
-
-      <div id="gallery"></div>
+<div id="galleryModal" class="modal">
+  <div class="modal-content">
+    <span class="close">&times;</span>
+    <div id="galleryHeader" style="display: flex; align-items: center; justify-content: center; position: relative;">
+      <button id="galleryEditButton" class="bs" style="position: absolute; left: 0;">Edit</button>
+      <h2 style="margin: 0;">Gallery</h2>
+    </div>
+    <div id="gallery"></div>
+  </div>
+</div>
+<!-- Confirm Delete Modal -->
+<div id="deleteConfirmModal" class="modal" style="display:none;">
+  <div class="modal-content">
+    <p>Are you sure you want to delete this artwork?</p>
+    <div style="display: flex; justify-content: center; gap: 1em;">
+      <button id="confirmDeleteButton" class="bs">Yes</button>
+      <button id="cancelDeleteButton" class="bs">No</button>
     </div>
   </div>
-
-  <!-- Confirm Delete Modal -->
-  <div id="deleteConfirmModal" class="modal" style="display:none;">
-    <div class="modal-content">
-      <p>Are you sure you want to delete this artwork?</p>
-      <div style="display: flex; justify-content: center; gap: 1em;">
-        <button id="confirmDeleteButton" class="bs">Yes</button>
-        <button id="cancelDeleteButton" class="bs">No</button>
-      </div>
-    </div>
+</div>
+<div id="exportOptionsModal" class="modal">
+  <div class="modal-content">
+    <span id="exportModalClose" class="close">×</span>
+    <h3>Export PNG</h3>
+    <p>Choose export type:</p>
+    <button id="exportWithBackgroundBtn" class="bs">With Background</button>
+    <button id="exportTransparentBtn" class="bs">Transparent</button>
   </div>
-
-
-  <div id="exportOptionsModal" class="modal">
-    <div class="modal-content">
-      <span id="exportModalClose" class="close">×</span>
-      <h3>Export PNG</h3>
-      <p>Choose export type:</p>
-      <button id="exportWithBackgroundBtn" class="bs">With Background</button>
-      <button id="exportTransparentBtn" class="bs">Transparent</button>
-    </div>
-  </div>
-
-
+</div>
 <div id="shareOptionsModal" class="modal">
   <div class="modal-content">
     <span id="shareModalClose" class="close" onclick="closeShareOptionsModal()">×</span>
@@ -258,18 +250,15 @@
     <button id="shareTransparentBtn" class="bs">Transparent</button>
   </div>
 </div>
+<div id="footer"></div>
 
+<link rel="stylesheet" href="{{ url_for('static', filename='js/highlight/style.min.css') }}?v={{ cache_bust() }}">
 
-  <div id="footer"></div>
-
-
-  <link rel="stylesheet" href="{{ url_for('static', filename='js/highlight/style.min.css') }}?v={{ cache_bust() }}">
-  <script src="{{ url_for('static', filename='js/highlight/highlight.min.js') }}?v={{ cache_bust() }}"></script>
-  <script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
-  <script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
-  
-  <script src="{{ url_for('static', filename='draw/draw25.js') }}?v={{ cache_bust() }}"></script>
-
+<script src="{{ url_for('static', filename='js/highlight/highlight.min.js') }}?v={{ cache_bust() }}"></script>
+<script src="{{ url_for('static', filename='js/marked/marked.min.js') }}?v={{ cache_bust() }}"></script>
+<script src="{{ url_for('static', filename='js/DOMPurify/purify.min.js') }}?v={{ cache_bust() }}"></script>
+<script src="{{ url_for('static', filename='js/jszip/jszip.min.js') }}?v={{ cache_bust() }}"></script>
+<script src="{{ url_for('static', filename='draw/draw67.js') }}?v={{ cache_bust() }}"></script>
 
 </body>
 </html>
