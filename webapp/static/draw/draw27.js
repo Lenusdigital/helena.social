@@ -1,4 +1,4 @@
-console.log("Helena Paint - draw19.js")
+console.log("Helena Paint - draw27.js")
 
 function isMobile() {
     return /Mobi|Android|iPhone|iPad|iPod/.test(navigator.userAgent);
@@ -12,9 +12,7 @@ let lastY = null;
 const canvas = document.getElementById("glCanvas");
 
 /*
-
     Zooming canvas – no timers
-
 */
 
 let zoomScale = 1;
@@ -26,6 +24,8 @@ let lastTouchDist = null;
 let lastTouchMidpoint = null;
 let isPanning = false;
 let isTwoFingerGesture = false;
+
+let isUIDragging = false;
 
 const canvasWrapper = document.getElementById("canvasWrapper") || canvas.parentElement;
 canvas.style.transformOrigin = "top left";
@@ -47,27 +47,109 @@ function updateCanvasTransform() {
     canvas.style.transformOrigin = "top left";
 }
 
+
+// Pan with two-finger scroll, pinch-zoom when ctrlKey is true (Mac trackpad)
 canvasWrapper.addEventListener("wheel", (e) => {
-    if (e.ctrlKey || e.metaKey) return;
-    e.preventDefault();
+  // We need to take over scrolling/zooming
+  e.preventDefault();
 
-    const wrapperRect = canvasWrapper.getBoundingClientRect();
-    const pointerX = e.clientX - wrapperRect.left;
-    const pointerY = e.clientY - wrapperRect.top;
+  // normalize wheel units (pixel vs line)
+  const unit = (e.deltaMode === 1) ? 16 : 1; // 1=line, 0=pixel
+  const dx = e.deltaX * unit;
+  const dy = e.deltaY * unit;
 
-    const worldX = (pointerX - panX) / zoomScale;
-    const worldY = (pointerY - panY) / zoomScale;
+  const wrapperRect = canvasWrapper.getBoundingClientRect();
+  const pointerX = e.clientX - wrapperRect.left;
+  const pointerY = e.clientY - wrapperRect.top;
 
-    const delta = -e.deltaY * 0.001;
-    const newScale = Math.min(Math.max(zoomScale + delta, zoomMin), zoomMax);
+  // World coords under the cursor before the change
+  const worldX = (pointerX - panX) / zoomScale;
+  const worldY = (pointerY - panY) / zoomScale;
+
+  if (e.ctrlKey) {
+    // 🫰 Pinch on Mac trackpad => zoom about cursor
+    const zoomSpeed = 0.0025; // tweak to taste
+    const newScale = Math.min(
+      Math.max(zoomScale - dy * zoomSpeed, zoomMin),
+      zoomMax
+    );
     const scaleChange = newScale / zoomScale;
 
+    // keep cursor-stationary zoom
     panX -= worldX * (scaleChange - 1) * zoomScale;
     panY -= worldY * (scaleChange - 1) * zoomScale;
 
     zoomScale = newScale;
     updateCanvasTransform();
+  } else {
+    // 🖐️ Two-finger scroll => pan the canvas
+    const panSpeed = 1; // tweak to taste (>=1 feels snappier on high-res trackpads)
+    panX -= dx * panSpeed;
+    panY -= dy * panSpeed;
+    updateCanvasTransform();
+  }
 }, { passive: false });
+
+
+let spacePanning = false;
+let panStart = null;
+
+document.addEventListener("keydown", e => { if (e.code === "Space") spacePanning = true; });
+document.addEventListener("keyup",   e => { if (e.code === "Space") spacePanning = false; });
+
+canvasWrapper.addEventListener("mousedown", e => {
+  if (!spacePanning) return;
+  e.preventDefault();
+  panStart = { x: e.clientX, y: e.clientY, panX0: panX, panY0: panY };
+});
+window.addEventListener("mousemove", e => {
+  if (!panStart) return;
+  panX = panStart.panX0 + (e.clientX - panStart.x);
+  panY = panStart.panY0 + (e.clientY - panStart.y);
+  updateCanvasTransform();
+});
+["mouseup","mouseleave"].forEach(ev => window.addEventListener(ev, () => panStart = null));
+
+
+
+canvasWrapper.addEventListener("mousedown", e => {
+  if (e.button !== 1) return; // middle
+  e.preventDefault();
+  const start = { x: e.clientX, y: e.clientY, panX0: panX, panY0: panY };
+  const move = ev => {
+    panX = start.panX0 + (ev.clientX - start.x);
+    panY = start.panY0 + (ev.clientY - start.y);
+    updateCanvasTransform();
+  };
+  const up = () => { window.removeEventListener("mousemove", move); window.removeEventListener("mouseup", up); };
+  window.addEventListener("mousemove", move);
+  window.addEventListener("mouseup", up);
+});
+
+
+
+
+// canvasWrapper.addEventListener("wheel", (e) => {
+//     if (e.ctrlKey || e.metaKey) return;
+//     e.preventDefault();
+
+//     const wrapperRect = canvasWrapper.getBoundingClientRect();
+//     const pointerX = e.clientX - wrapperRect.left;
+//     const pointerY = e.clientY - wrapperRect.top;
+
+//     const worldX = (pointerX - panX) / zoomScale;
+//     const worldY = (pointerY - panY) / zoomScale;
+
+//     const delta = -e.deltaY * 0.001;
+//     const newScale = Math.min(Math.max(zoomScale + delta, zoomMin), zoomMax);
+//     const scaleChange = newScale / zoomScale;
+
+//     panX -= worldX * (scaleChange - 1) * zoomScale;
+//     panY -= worldY * (scaleChange - 1) * zoomScale;
+
+//     zoomScale = newScale;
+//     updateCanvasTransform();
+// }, { passive: false });
 
 canvasWrapper.addEventListener("touchstart", (e) => {
     if (e.touches.length === 2) {
@@ -481,14 +563,17 @@ const quadVS = `
 
 // Fragment shader for drawing a texture (used for background and the paint layer)
 const quadFS = `
-  precision mediump float;
-  varying vec2 v_texCoord;
-  uniform sampler2D u_texture;
-  void main() {
-    gl_FragColor = texture2D(u_texture, v_texCoord);
-  }
-`;
+    precision mediump float;
+    varying vec2 v_texCoord;
+    uniform sampler2D u_texture;
+    uniform float u_layerOpacity; // NEW
 
+    void main() {
+      vec4 c = texture2D(u_texture, v_texCoord);
+      c.a *= u_layerOpacity;      // apply per-layer opacity here
+      gl_FragColor = c;
+    }
+`;
 
 
 const paintFS = `
@@ -525,37 +610,89 @@ const overlayFS = `
 
 
 //–––––––––––––––––––
-// INITIALIZATION
+// INITIALIZATION (layers-ready)
 //–––––––––––––––––––
-function initGL() {
-    if (!gl) {
-        console.error("WebGL not supported.");
-        return;
-    }
-    quadProgram = createProgram(gl, quadVS, quadFS);
-    paintProgram = createProgram(gl, quadVS, paintFS);
-    overlayProgram = createProgram(gl, quadVS, overlayFS);
+
+function getActiveLayer() {
+  return layers[activeLayerIndex];
 }
 
-// Create (or recreate) the persistent paint layer matching canvas size.
-function initPaintLayer() {
-    if (paintTexture) { gl.deleteTexture(paintTexture);
-        paintTexture = null; }
-    if (paintFBO) { gl.deleteFramebuffer(paintFBO);
-        paintFBO = null; }
-    paintTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, canvas.width, canvas.height,
-        0, gl.RGBA, gl.UNSIGNED_BYTE, null);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
-    paintFBO = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, paintTexture, 0);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+function syncActiveAliases() {
+  const L = getActiveLayer();
+  if (!L) { paintFBO = null; paintTexture = null; return; }
+  paintFBO = L.fbo;
+  paintTexture = L.texture;
 }
+
+
+function initGL() {
+  if (!gl) { console.error("WebGL not supported."); return; }
+  // If you kept the original quadFS, this still works.
+  // If you adopted the opacity-aware fragment shader, remember to set u_layerOpacity before drawing each layer.
+  quadProgram   = createProgram(gl, quadVS, quadFS);
+  paintProgram  = createProgram(gl, quadVS, paintFS);
+  overlayProgram= createProgram(gl, quadVS, overlayFS);
+}
+
+// Per-layer FBO/texture
+function createLayerFBO(width, height) {
+  const tex = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, tex);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, width, height, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+
+  // Use linear filtering for smoother scaling
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+  const fbo = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+
+  gl.clearColor(0, 0, 0, 0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
+
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  return { texture: tex, fbo };
+}
+
+
+// Global layers model
+// Each layer: { id, name, fbo, texture, visible, opacity, history:[], redo:[] }
+let layers = [];
+let activeLayerIndex = 0;
+
+function addLayer(name = `Layer ${layers.length+1}`, insertAboveIndex = activeLayerIndex) {
+  const { texture, fbo } = createLayerFBO(fixedFBOWidth, fixedFBOHeight);
+  const layer = {
+    id: Date.now() + Math.random(),
+    name, fbo, texture,
+    visible: true, opacity: 1,
+    history: [], redo: []
+  };
+  const pos = Math.min(insertAboveIndex + 1, layers.length);
+  layers.splice(pos, 0, layer);
+  activeLayerIndex = pos;
+  syncActiveAliases();
+  if (typeof rebuildLayersUI === "function") rebuildLayersUI();
+  needsRedraw = true;
+}
+
+
+// Create (or recreate) the layers stack matching fixed FBO size.
+function initPaintLayerFixed() {
+  // dispose old
+  layers.forEach(L => { gl.deleteTexture(L.texture); gl.deleteFramebuffer(L.fbo); });
+  layers = [];
+  activeLayerIndex = 0;
+
+  // one default layer
+  addLayer("Layer 1", -1);
+  syncActiveAliases();   // legacy aliases kept in sync
+}
+
 
 
 //–––––––––––––––––––
@@ -591,38 +728,39 @@ function createTextureFromImage(image, isOverlay = false) {
 }
 
 
-function initPaintLayerFixed() {
-  if (paintTexture) { gl.deleteTexture(paintTexture); paintTexture = null; }
-  if (paintFBO) { gl.deleteFramebuffer(paintFBO); paintFBO = null; }
-  paintTexture = gl.createTexture();
-  gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-  gl.texImage2D(
-    gl.TEXTURE_2D,
-    0,
-    gl.RGBA,
-    fixedFBOWidth,
-    fixedFBOHeight,
-    0,
-    gl.RGBA,
-    gl.UNSIGNED_BYTE,
-    null
-  );
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-  paintFBO = gl.createFramebuffer();
-  gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, paintTexture, 0);
-  // Clear the persistent layer to fully transparent:
-  gl.clearColor(0, 0, 0, 0);
-  gl.clear(gl.COLOR_BUFFER_BIT);
-  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+function centerAndFitToWrapper() {
+  // measure wrapper as it is *now*
+  const wrap = canvasWrapper.getBoundingClientRect();
+
+  // canvas bitmap size (no CSS)
+  const cw = canvas.width;
+  const ch = canvas.height;
+
+  // choose a scale that fits; clamp to your zoom limits
+  const fitScale = Math.min(wrap.width / cw, wrap.height / ch);
+  zoomScale = Math.min(zoomMax, Math.max(zoomMin, fitScale));
+
+  // center with that scale
+  panX = Math.round((wrap.width  - cw * zoomScale) / 2);
+  panY = Math.round((wrap.height - ch * zoomScale) / 2);
+
+  updateCanvasTransform();
+  resetStrokeState();
+  needsRedraw = true;
+}
+
+// keep a helper that defers to the next frame so layout is settled
+function centerNextFrame() {
+  requestAnimationFrame(() => {
+    centerAndFitToWrapper();
+  });
 }
 
 
 
+
 function loadDefaultImage() {
+
   const baseCanvas = document.createElement("canvas");
   baseCanvas.width = window.innerWidth;
   baseCanvas.height = window.innerHeight;
@@ -693,24 +831,34 @@ function loadDefaultImage() {
   const img = new Image();
   img.crossOrigin = "anonymous";
 
-  img.onload = () => {
-    currentImage = img;
-    fixedFBOWidth = img.width;
-    fixedFBOHeight = img.height;
-    initPaintLayerFixed();
+img.onload = () => {
+  currentImage = img;
+  fixedFBOWidth = img.width;
+  fixedFBOHeight = img.height;
+  initPaintLayerFixed();
+
+  updateCanvasSize(img);
+  initFloodFBOs();
+  createTextureFromImage(img);
+
+  // ---- force layout, then center (no timers) ----
+  void canvas.offsetWidth; 
+  void canvasWrapper.offsetWidth;
+  zoomScale = 1;
+  panX = (canvasWrapper.clientWidth  - canvas.width ) / 2;
+  panY = (canvasWrapper.clientHeight - canvas.height) / 2;
+  updateCanvasTransform();
+  resetStrokeState();
+  needsRedraw = true;
+  // -----------------------------------------------
+
+  initFloodFillProgram();
+  addSoundEvents();
+};
 
 
-    updateCanvasSize(img);
 
-    initFloodFBOs();
 
-    createTextureFromImage(img);
-
-    initFloodFillProgram();
-
-    addSoundEvents();
-
-  };
   img.onerror = () => console.error("Failed to load default image.");
 
   img.src = baseCanvas.toDataURL("image/png");
@@ -803,98 +951,232 @@ function loadBrushes() {
 
 
 //–––––––––––––––––––
-// CANVAS RESIZING
+// CANVAS RESIZING (layers version)
 //–––––––––––––––––––
 
-function updateBrushSize() {
-    const newWidth = canvas.width;
-    const newHeight = canvas.height;
-
-    // Adjust the brush size relative to the canvas width.
-    // For example, 0.1 means the brush size is 10% of the canvas width.
-    brushSize = Math.min(brushSize, newWidth / 10);
+function centerCanvasInWrapper() {
+  const wrap = canvasWrapper.getBoundingClientRect();
+  const cw = canvas.width  * zoomScale;
+  const ch = canvas.height * zoomScale;
+  panX = (wrap.width  - cw) / 2;
+  panY = (wrap.height - ch) / 2;
+  updateCanvasTransform();
 }
+
+// only act if it's basically gone (not visible), otherwise do nothing
+function ensureCanvasNotLost() {
+  const wrap = canvasWrapper.getBoundingClientRect();
+  const c = canvas.getBoundingClientRect();
+
+  // intersection area
+  const ix = Math.max(0, Math.min(c.right, wrap.right) - Math.min(c.left, wrap.left));
+  const iy = Math.max(0, Math.min(c.bottom, wrap.bottom) - Math.min(c.top,  wrap.top));
+  const interArea = ix * iy;
+  const canvasArea = c.width * c.height;
+
+  // if 0 (completely gone) OR < 5% visible → snap back once
+  if (!isFinite(interArea) || canvasArea <= 0 || interArea / canvasArea < 0.05) {
+    centerCanvasInWrapper();
+  }
+}
+
+// run the check at safe moments only (after user gesture finishes / layout changes)
+["mouseup","mouseleave","touchend","touchcancel"].forEach(ev =>
+  canvasWrapper.addEventListener(ev, ensureCanvasNotLost, { passive:true })
+);
+window.addEventListener("resize", ensureCanvasNotLost);
+if (window.visualViewport) {
+  visualViewport.addEventListener("resize", ensureCanvasNotLost);
+  visualViewport.addEventListener("scroll", ensureCanvasNotLost);
+}
+
+
+let lastMultiTap = 0;
+canvasWrapper.addEventListener("touchend", (e) => {
+  if (e.changedTouches.length >= 2) {
+    const now = performance.now();
+    if (now - lastMultiTap < 350) {
+      centerCanvasInWrapper(); // quick reset
+    }
+    lastMultiTap = now;
+  }
+}, { passive: true });
+
+
+function snapBackIfLost(el, margin) {
+  margin = (typeof margin === 'number') ? margin : 8;
+
+  var r  = el.getBoundingClientRect();
+  var vv = (window.visualViewport) ? window.visualViewport : null;
+  var vw = (vv && vv.width)  ? vv.width  : window.innerWidth;
+  var vh = (vv && vv.height) ? vv.height : window.innerHeight;
+
+  // if it’s still visible, do nothing
+  var visible =
+    (r.right  > margin) &&
+    (r.bottom > margin) &&
+    (r.left   < vw - margin) &&
+    (r.top    < vh - margin);
+  if (visible) return;
+
+  // otherwise, bring it back to a safe corner
+  var left = Math.min(Math.max(el.offsetLeft || 0, margin), vw - r.width  - margin);
+  var top  = Math.min(Math.max(el.offsetTop  || 0, margin), vh - r.height - margin);
+  el.style.left = Math.round(left) + 'px';
+  el.style.top  = Math.round(top)  + 'px';
+}
+
+
+// call on pointerup for your draggable panels
+[
+  ["brushSizeSliderContainer","brushSizeDragBar"],
+  ["brushContainerWrapper","brushContainerDragBar"],
+  ["layersPanel",".layers-header"] // if you have a header there
+].forEach(([id, handleSel]) => {
+  const el = document.getElementById(id);
+  const handle = el && (handleSel.startsWith("#") ? document.querySelector(handleSel) : el.querySelector(handleSel));
+  if (!el || !handle) return;
+  const end = (e) => { try { handle.releasePointerCapture(e.pointerId); } catch {} snapBackIfLost(el); };
+  handle.addEventListener("pointerup", end);
+  handle.addEventListener("pointercancel", end);
+});
+
+// also on resize/orientation
+window.addEventListener("resize", () => {
+  ["brushSizeSliderContainer","brushContainerWrapper","layersPanel"]
+    .forEach(id => { const el = document.getElementById(id); if (el) snapBackIfLost(el); });
+});
+
+let resizeTimer = null;
+window.addEventListener("resize", () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(() => {
+    if (currentImage) updateCanvasSize(currentImage);
+    centerCanvasInWrapper?.();
+  }, 120);
+});
+
+
+function updateBrushSize() {
+  const newWidth = canvas.width;
+  // Keep same logic if you like; brush size is a fraction of screen width
+  brushSize = Math.min(brushSize, newWidth / 10);
+}
+
 
 
 function updateCanvasSize(image) {
-    if (!image) return;
+  if (!image) return;
 
-    const windowAspect = window.innerWidth / window.innerHeight;
-    imageAspect = image.width / image.height;
-    let newWidth, newHeight;
+  const windowAspect = window.innerWidth / window.innerHeight;
+  imageAspect = image.width / image.height;
 
-    if (imageAspect > windowAspect) {
-        newWidth = window.innerWidth;
-        newHeight = window.innerWidth / imageAspect;
-    } else {
-        newHeight = window.innerHeight;
-        newWidth = window.innerHeight * imageAspect;
-    }
+  let newWidth, newHeight;
+  if (imageAspect > windowAspect) {
+    newWidth  = window.innerWidth;
+    newHeight = window.innerWidth / imageAspect;
+  } else {
+    newHeight = window.innerHeight;
+    newWidth  = window.innerHeight * imageAspect;
+  }
 
-    const oldPaintFBO = paintFBO;
-    const oldPaintTexture = paintTexture;
+  // Only resize the on-screen canvas + viewport.
+  // Do NOT recreate any paint textures here (layers keep fixedFBOWidth/Height).
+  canvas.width  = Math.round(newWidth);
+  canvas.height = Math.round(newHeight);
+  gl.viewport(0, 0, canvas.width, canvas.height);
 
-    canvas.width = newWidth;
-    canvas.height = newHeight;
-    gl.viewport(0, 0, newWidth, newHeight);
-
-    const newPaintTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, newPaintTexture);
-    gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        fixedFBOWidth,
-        fixedFBOHeight,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null
-    );
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-
-    const newPaintFBO = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, newPaintFBO);
-    gl.framebufferTexture2D(
-        gl.DRAW_FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        newPaintTexture,
-        0
-    );
-
-    if (oldPaintFBO && fixedFBOWidth > 0 && fixedFBOHeight > 0) {
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, oldPaintFBO);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, newPaintFBO);
-        gl.blitFramebuffer(
-            0, 0, fixedFBOWidth, fixedFBOHeight,
-            0, 0, fixedFBOWidth, fixedFBOHeight,
-            gl.COLOR_BUFFER_BIT,
-            gl.NEAREST
-        );
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-        gl.deleteTexture(oldPaintTexture);
-        gl.deleteFramebuffer(oldPaintFBO);
-    }
-
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
-
-    paintTexture = newPaintTexture;
-    paintFBO = newPaintFBO;
-
-    // Adjust brush size based on new canvas size
-    updateBrushSize();
-
-    drawScene();
+  updateBrushSize();
+  needsRedraw = true;  // let the render loop redraw
 }
 
 window.addEventListener("resize", () => {
-    if (currentImage) updateCanvasSize(currentImage);
+  if (currentImage) updateCanvasSize(currentImage);
 });
 
+
+function resetStrokeState() {
+  // clear last canvas- and FBO-space cursors
+  lastX = null;
+  lastY = null;
+  lastFx = null;
+  lastFy = null;
+
+  // optional: reset draw throttling + sound cursors if you use them
+  if (typeof lastDrawTime !== "undefined") lastDrawTime = 0;
+  if (typeof soundLastX !== "undefined") soundLastX = null;
+  if (typeof soundLastY !== "undefined") soundLastY = null;
+}
+
+/**
+ * Resize the on-screen canvas to fit the image while keeping the fixed FBO size unchanged.
+ * Also recenters/retains pan-zoom safely and resets stroke state so angles/lines don’t jump.
+ */
+
+
+function setDocumentSize(w, h) {
+  fixedFBOWidth  = w;
+  fixedFBOHeight = h;
+
+  // The on-screen canvas bitmap == document size (1:1)
+  canvas.width  = w;
+  canvas.height = h;
+
+  // GL viewport matches canvas
+  gl.viewport(0, 0, w, h);
+
+  // Start at 1:1. Viewport is the wrapper; we pan to center.
+  zoomScale = 1;
+  const wrapRect = canvasWrapper.getBoundingClientRect();
+  panX = Math.round((wrapRect.width  - w) / 2);
+  panY = Math.round((wrapRect.height - h) / 2);
+  updateCanvasTransform();
+
+  // Reset stroke state so angles don’t jump
+  resetStrokeState();
+  needsRedraw = true;
+}
+
+
+
+// function updateCanvasSize(image) {
+//   if (!image) return;
+
+//   const windowAspect = window.innerWidth / window.innerHeight;
+//   const imgAspect    = image.width / image.height;
+
+//   let newWidth, newHeight;
+//   if (imgAspect > windowAspect) {
+//     newWidth  = window.innerWidth;
+//     newHeight = window.innerWidth / imgAspect;
+//   } else {
+//     newHeight = window.innerHeight;
+//     newWidth  = window.innerHeight * imgAspect;
+//   }
+
+//   // apply new canvas size + GL viewport
+//   canvas.width  = Math.round(newWidth);
+//   canvas.height = Math.round(newHeight);
+//   gl.viewport(0, 0, canvas.width, canvas.height);
+
+//   // keep brush UI scale sensible
+//   if (typeof updateBrushSize === "function") updateBrushSize();
+
+//   // make sure overlayPosition stays valid after resize
+//   if (Array.isArray(overlayPosition) && overlayPosition.length === 2) {
+//     overlayPosition[0] = Math.min(1, Math.max(0, overlayPosition[0]));
+//     overlayPosition[1] = Math.min(1, Math.max(0, overlayPosition[1]));
+//   }
+
+//   // refresh CSS transform (zoom/pan) and recenter if it drifted
+//   if (typeof updateCanvasTransform === "function") updateCanvasTransform();
+//   if (typeof ensureCanvasNotLost === "function") ensureCanvasNotLost();
+
+//   // very important: clear last stroke anchors so angle/lines use fresh deltas
+//   resetStrokeState();
+
+//   needsRedraw = true;
+// }
 
 
 
@@ -981,14 +1263,54 @@ function stopDrawingSound() {
 }
 
 // **Fix Pointer & Touch Tracking**
-function getTouchPos(event) {
-    const rect = canvas.getBoundingClientRect();
-    const touch = event.touches[0] || event.changedTouches[0];
-    return {
-        x: (touch.clientX - rect.left) * (canvas.width / rect.width),
-        y: (touch.clientY - rect.top) * (canvas.height / rect.height)
-    };
+
+// Kill ALL other screenToCanvasPx / canvasPxToFBO / pointerToBoth variants.
+function pointerFromClient(clientX, clientY) {
+  const r = canvas.getBoundingClientRect();
+  const nx = (clientX - r.left) / r.width;   // 0..1
+  const ny = (clientY - r.top)  / r.height;  // 0..1
+
+  // canvas bitmap px (for overlay/angle calc)
+  const cx = nx * canvas.width;
+  const cy = ny * canvas.height;
+
+  // FBO px — IMPORTANT: WebGL FBO origin is bottom-left → flip Y here
+  const fx = nx * fixedFBOWidth;
+  const fy = (1 - ny) * fixedFBOHeight;
+
+  return { nx, ny, cx, cy, fx, fy };
 }
+
+
+
+// Convert screen pointer to canvas bitmap px, undoing CSS pan/zoom
+function screenToCanvasPx(clientX, clientY) {
+  const wrapRect = canvasWrapper.getBoundingClientRect();
+  const px = clientX - wrapRect.left;
+  const py = clientY - wrapRect.top;
+  const cx = (px - panX) / zoomScale;
+  const cy = (py - panY) / zoomScale;
+  return {
+    x: Math.max(0, Math.min(canvas.width,  cx)),
+    y: Math.max(0, Math.min(canvas.height, cy))
+  };
+}
+
+// Canvas px → fixed FBO px (top-left origin convention)
+function canvasPxToFBO(x, y) {
+  return {
+    fx: x * (fixedFBOWidth  / canvas.width),
+    fy: y * (fixedFBOHeight / canvas.height)
+  };
+}
+
+// Get both spaces from a MouseEvent or a Touch
+function pointerToBoth(eLike) {
+  const c = screenToCanvasPx(eLike.clientX, eLike.clientY);
+  const f = canvasPxToFBO(c.x, c.y);
+  return { cx: c.x, cy: c.y, fx: f.fx, fy: f.fy };
+}
+
 
 // **Attach to Drawing Events**
 function addSoundEvents() {
@@ -1083,117 +1405,251 @@ function addSoundEvents() {
 
 
 
+// //–––––––––––––––––––
+// // MOUSE/TOUCH HANDLING
+// //–––––––––––––––––––
+// function getMousePos(event) {
+//     const rect = canvas.getBoundingClientRect();
+//     let x, y;
+//     if (event.offsetX !== undefined && event.offsetY !== undefined) {
+//         x = event.offsetX;
+//         y = event.offsetY;
+//     } else {
+//         x = (event.clientX - rect.left) * (canvas.width / rect.width);
+//         y = (event.clientY - rect.top) * (canvas.height / rect.height);
+//     }
+//     return { x, y };
+// }
+
+// // canvas.addEventListener("mousedown", (event) => {
+// //     if (currentTool === 'fill') {
+// //         const pos = getMousePos(event);
+// //         performFloodFill(pos.x, pos.y);
+// //         return;
+// //     }
+
+// //     isDrawing = true;
+// //     const pos = getMousePos(event);
+// //     overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+// //     drawBrushStrokeToPaintLayer(pos.x, pos.y);
+// // });
+
+// // mouse
+// canvas.addEventListener("mousedown", (ev) => {
+//   const p = pointerToBoth(ev);
+//   overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+//   if (currentTool === 'fill') { performFloodFill(p.fx, p.fy); return; }
+//   isDrawing = true;
+//   drawBrushStrokeToPaintLayer(p.cx, p.cy); // see step 3 below
+// });
+
+// canvas.addEventListener("mousemove", (ev) => {
+//   const p = pointerToBoth(ev);
+//   lastX = p.cx; lastY = p.cy;
+//   overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+//   if (isDrawing) drawBrushStrokeToPaintLayer(p.cx, p.cy);
+// });
+
+// // touch
+// canvas.addEventListener("touchstart", (ev) => {
+//   ev.preventDefault();
+//   const t = ev.touches[0];
+//   const p = pointerToBoth(t);
+//   overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+//   if (currentTool === 'fill') { performFloodFill(p.fx, p.fy); return; }
+//   isDrawing = true;
+//   drawBrushStrokeToPaintLayer(p.cx, p.cy);
+// });
+
+// canvas.addEventListener("touchmove", (ev) => {
+//   ev.preventDefault();
+//   const t = ev.touches[0];
+//   const p = pointerToBoth(t);
+//   lastX = p.cx; lastY = p.cy;
+//   overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+//   if (isDrawing) drawBrushStrokeToPaintLayer(p.cx, p.cy);
+// });
+
+
+
+// let lastDrawTime = 0;
+
+// canvas.addEventListener("mousemove", (event) => {
+//     if (Date.now() - lastDrawTime < 16) return;
+//     lastDrawTime = Date.now();
+//     const pos = getMousePos(event);
+//     if (lastX !== null && lastY !== null) {
+//         const dx = pos.x - lastX;
+//         const dy = pos.y - lastY;
+//         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//             currentAngle = Math.atan2(dy, dx);
+//         }
+//     }
+//     lastX = pos.x;
+//     lastY = pos.y;
+//     overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+//     if (isDrawing) {
+//         drawBrushStrokeToPaintLayer(pos.x, pos.y);
+//     }
+// });
+
+// // Replace the existing touchmove listener with:
+// canvas.addEventListener("touchmove", (event) => {
+//     event.preventDefault();
+//     if (Date.now() - lastDrawTime < 16) return;
+//     lastDrawTime = Date.now();
+//     const pos = getMousePos(event.touches[0]);
+//     if (lastX !== null && lastY !== null) {
+//         const dx = pos.x - lastX;
+//         const dy = pos.y - lastY;
+//         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//             currentAngle = Math.atan2(dy, dx);
+//         }
+//     }
+//     lastX = pos.x;
+//     lastY = pos.y;
+//     overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+//     if (isDrawing) {
+//         drawBrushStrokeToPaintLayer(pos.x, pos.y);
+//     }
+// });
+
+
+// canvas.addEventListener("mouseup", () => { isDrawing = false; });
+// canvas.addEventListener("mouseleave", () => { isDrawing = false; });
+
+
+// canvas.addEventListener("mouseup", () => {
+//     isDrawing = false;
+//     lastFx = null;
+//     lastFy = null;
+// });
+
+// canvas.addEventListener("mouseleave", () => {
+//     isDrawing = false;
+//     lastFx = null;
+//     lastFy = null;
+// });
+
+// canvas.addEventListener("touchend", () => {
+//     isDrawing = false;
+//     lastFx = null;
+//     lastFy = null;
+// });
+
+
+// canvas.addEventListener("touchstart", (event) => {
+//     event.preventDefault();
+//     const pos = getMousePos(event.touches[0]);
+
+//     if (currentTool === 'fill') {
+//         performFloodFill(pos.x, pos.y);
+//         return;
+//     }
+
+//     isDrawing = true;
+//     overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
+//     drawBrushStrokeToPaintLayer(pos.x, pos.y);
+// });
+
+
 //–––––––––––––––––––
 // MOUSE/TOUCH HANDLING
 //–––––––––––––––––––
-function getMousePos(event) {
-    const rect = canvas.getBoundingClientRect();
-    let x, y;
-    if (event.offsetX !== undefined && event.offsetY !== undefined) {
-        x = event.offsetX;
-        y = event.offsetY;
-    } else {
-        x = (event.clientX - rect.left) * (canvas.width / rect.width);
-        y = (event.clientY - rect.top) * (canvas.height / rect.height);
-    }
-    return { x, y };
+
+// Convert screen pointer to canvas pixel coords, undoing CSS pan/zoom
+function screenToCanvasPx(clientX, clientY) {
+  const wrapRect = canvasWrapper.getBoundingClientRect();
+  const px = clientX - wrapRect.left;
+  const py = clientY - wrapRect.top;
+  const cx = (px - panX) / zoomScale;
+  const cy = (py - panY) / zoomScale;
+  const x = Math.max(0, Math.min(canvas.width,  cx));
+  const y = Math.max(0, Math.min(canvas.height, cy));
+  return { x, y };
 }
 
-canvas.addEventListener("mousedown", (event) => {
-    if (currentTool === 'fill') {
-        const pos = getMousePos(event);
-        performFloodFill(pos.x, pos.y);
-        return;
-    }
+// Convert canvas pixels to fixed FBO pixels
+function canvasPxToFBO(x, y) {
+  return {
+    fx: x * (fixedFBOWidth  / canvas.width),
+    fy: y * (fixedFBOHeight / canvas.height)
+  };
+}
 
-    isDrawing = true;
-    const pos = getMousePos(event);
-    overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-    drawBrushStrokeToPaintLayer(pos.x, pos.y);
-});
-
+// Get both spaces (canvas px + FBO px) from a MouseEvent or a single Touch
+function pointerToBoth(eLike) {
+  const c = screenToCanvasPx(eLike.clientX, eLike.clientY);
+  const f = canvasPxToFBO(c.x, c.y);
+  return { cx: c.x, cy: c.y, fx: f.fx, fy: f.fy };
+}
 
 
 
 let lastDrawTime = 0;
 
-canvas.addEventListener("mousemove", (event) => {
-    if (Date.now() - lastDrawTime < 16) return;
-    lastDrawTime = Date.now();
-    const pos = getMousePos(event);
-    if (lastX !== null && lastY !== null) {
-        const dx = pos.x - lastX;
-        const dy = pos.y - lastY;
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            currentAngle = Math.atan2(dy, dx);
-        }
-    }
-    lastX = pos.x;
-    lastY = pos.y;
-    overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-    if (isDrawing) {
-        drawBrushStrokeToPaintLayer(pos.x, pos.y);
-    }
+canvas.addEventListener("mousedown", (ev) => {
+  const p = pointerToBoth(ev);
+  overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+  if (currentTool === "fill") { performFloodFill(p.fx, p.fy); return; }
+  isDrawing = true;
+  drawBrushStrokeToPaintLayer(p.cx, p.cy);
 });
 
-// Replace the existing touchmove listener with:
-canvas.addEventListener("touchmove", (event) => {
-    event.preventDefault();
-    if (Date.now() - lastDrawTime < 16) return;
-    lastDrawTime = Date.now();
-    const pos = getMousePos(event.touches[0]);
-    if (lastX !== null && lastY !== null) {
-        const dx = pos.x - lastX;
-        const dy = pos.y - lastY;
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            currentAngle = Math.atan2(dy, dx);
-        }
-    }
-    lastX = pos.x;
-    lastY = pos.y;
-    overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-    if (isDrawing) {
-        drawBrushStrokeToPaintLayer(pos.x, pos.y);
-    }
+canvas.addEventListener("mousemove", (ev) => {
+  const now = Date.now();
+  if (now - lastDrawTime < 16) return;
+  lastDrawTime = now;
+
+  const p = pointerToBoth(ev);
+
+  if (lastX !== null && lastY !== null) {
+    const dx = p.cx - lastX, dy = p.cy - lastY;
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) currentAngle = Math.atan2(dy, dx);
+  }
+  lastX = p.cx; lastY = p.cy;
+
+  overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+  if (isDrawing) drawBrushStrokeToPaintLayer(p.cx, p.cy);
 });
 
+canvas.addEventListener("mouseup",   () => { isDrawing = false; lastFx = null; lastFy = null; });
+canvas.addEventListener("mouseleave",() => { isDrawing = false; lastFx = null; lastFy = null; });
 
-canvas.addEventListener("mouseup", () => { isDrawing = false; });
-canvas.addEventListener("mouseleave", () => { isDrawing = false; });
+canvas.addEventListener("touchstart", (ev) => {
+  ev.preventDefault();
+  if (isTwoFingerGesture) return; // ignore pinch
+  const t = ev.touches[0]; if (!t) return;
+  const p = pointerToBoth(t);
+  overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+  if (currentTool === "fill") { performFloodFill(p.fx, p.fy); return; }
+  isDrawing = true;
+  drawBrushStrokeToPaintLayer(p.cx, p.cy);
+}, { passive: false });
 
+canvas.addEventListener("touchmove", (ev) => {
+  ev.preventDefault();
+  if (isTwoFingerGesture) return;
+  const t = ev.touches[0]; if (!t) return;
 
-canvas.addEventListener("mouseup", () => {
-    isDrawing = false;
-    lastFx = null;
-    lastFy = null;
-});
+  const now = Date.now();
+  if (now - lastDrawTime < 16) return;
+  lastDrawTime = now;
 
-canvas.addEventListener("mouseleave", () => {
-    isDrawing = false;
-    lastFx = null;
-    lastFy = null;
-});
+  const p = pointerToBoth(t);
 
-canvas.addEventListener("touchend", () => {
-    isDrawing = false;
-    lastFx = null;
-    lastFy = null;
-});
+  if (lastX !== null && lastY !== null) {
+    const dx = p.cx - lastX, dy = p.cy - lastY;
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) currentAngle = Math.atan2(dy, dx);
+  }
+  lastX = p.cx; lastY = p.cy;
 
+  overlayPosition = [p.cx / canvas.width, p.cy / canvas.height];
+  if (isDrawing) drawBrushStrokeToPaintLayer(p.cx, p.cy);
+}, { passive: false });
 
-canvas.addEventListener("touchstart", (event) => {
-    event.preventDefault();
-    const pos = getMousePos(event.touches[0]);
-
-    if (currentTool === 'fill') {
-        performFloodFill(pos.x, pos.y);
-        return;
-    }
-
-    isDrawing = true;
-    overlayPosition = [pos.x / canvas.width, pos.y / canvas.height];
-    drawBrushStrokeToPaintLayer(pos.x, pos.y);
-});
+canvas.addEventListener("touchend",   () => { isDrawing = false; lastFx = null; lastFy = null; }, { passive: true });
+canvas.addEventListener("touchcancel",() => { isDrawing = false; lastFx = null; lastFy = null; }, { passive: true });
 
 
 
@@ -1286,6 +1742,206 @@ document.addEventListener("DOMContentLoaded", () => {
 
 
 
+function rebuildLayersUI() {
+  const list = document.getElementById("layersList");
+  if (!list) return;
+
+  list.innerHTML = "";
+
+  // helper so we don't repeat layer selection logic
+  function selectLayer(idx, layer) {
+    if (activeLayerIndex !== idx) {
+      activeLayerIndex = idx;
+      syncActiveAliases();
+      rebuildLayersUI();
+      showStatusMessage(`Selected: ${layer.name}`, "info");
+      needsRedraw = true;
+    }
+  }
+
+  layers.forEach((L, idx) => {
+    const el = document.createElement("div");
+    el.className = "layer-item" + (idx === activeLayerIndex ? " active" : "");
+    el.dataset.index = String(idx);
+
+    // —— Visibility: eye button instead of checkbox
+    const vis = document.createElement("div");
+    vis.className = "layer-vis";
+
+    const visBtn = document.createElement("button");
+    visBtn.type = "button";
+    visBtn.className = "bs icon-btn";
+    visBtn.title = L.visible ? "Hide layer" : "Show layer";
+    visBtn.setAttribute("aria-label", `${L.visible ? "Hide" : "Show"} ${L.name}`);
+
+    // change these paths if your eye icons live somewhere else:
+    const EYE_OPEN  = "/static/draw/images/icons/show.svg";
+    const EYE_CLOSE = "/static/draw/images/icons/hide.svg";
+
+    const visIcon = document.createElement("img");
+    visIcon.alt = L.visible ? "Visible" : "Hidden";
+    visIcon.src = L.visible ? EYE_OPEN : EYE_CLOSE;
+    visIcon.style.pointerEvents = "none"; // let button receive the click
+    visBtn.appendChild(visIcon);
+
+    function updateEye() {
+      visIcon.src = L.visible ? EYE_OPEN : EYE_CLOSE;
+      visIcon.alt = L.visible ? "Visible" : "Hidden";
+      visBtn.title = L.visible ? "Hide layer" : "Show layer";
+      visBtn.setAttribute("aria-label", `${L.visible ? "Hide" : "Show"} ${L.name}`);
+    }
+
+    visBtn.addEventListener("click", (e) => {
+      e.stopPropagation();     // don’t select row when toggling visibility
+      L.visible = !L.visible;
+      updateEye();
+      needsRedraw = true;
+    });
+
+    vis.appendChild(visBtn);
+
+    // —— Name (inline editable) — focusing it also selects the layer
+    const nameWrap = document.createElement("div");
+    nameWrap.className = "layer-name";
+
+    const nameInput = document.createElement("input");
+    nameInput.value = L.name;
+    nameInput.title = "Rename layer";
+    nameInput.setAttribute("aria-label", `Rename ${L.name}`);
+
+    // don’t block row click completely—just stop accidental double handling
+    nameInput.addEventListener("click", (e) => e.stopPropagation());
+
+    // make sure clicking/focusing the input selects the layer first
+    nameInput.addEventListener("mousedown", (e) => {
+      // select on mousedown so selection changes before the cursor is placed
+      selectLayer(idx, L);
+    });
+    nameInput.addEventListener("focus", () => {
+      selectLayer(idx, L);
+    });
+
+    // commit on change/blur only if different
+    const commitName = () => {
+      const v = nameInput.value;
+      if (v !== L.name) {
+        L.name = v;
+        // update ARIA/title for the eye as name changed
+        updateEye();
+      }
+    };
+    nameInput.addEventListener("change", commitName);
+    nameInput.addEventListener("blur", commitName);
+
+    nameWrap.appendChild(nameInput);
+
+    // —— Ops (up/down)
+    const ops = document.createElement("div");
+    ops.className = "layer-ops";
+
+    const upBtn = document.createElement("button");
+    upBtn.className = "bs";
+    upBtn.textContent = "Up";
+    upBtn.title = "Move up";
+    upBtn.addEventListener("click", (ev) => { ev.stopPropagation(); moveLayerUp(idx); });
+
+    const downBtn = document.createElement("button");
+    downBtn.className = "bs";
+    downBtn.textContent = "Down";
+    downBtn.title = "Move down";
+    downBtn.addEventListener("click", (ev) => { ev.stopPropagation(); moveLayerDown(idx); });
+
+    ops.appendChild(upBtn);
+    ops.appendChild(downBtn);
+
+    // —— Opacity
+    const opacityRow = document.createElement("div");
+    opacityRow.className = "layer-opacity";
+
+    const opLabel = document.createElement("span");
+    opLabel.textContent = "Opacity";
+
+    const opRange = document.createElement("input");
+    opRange.type = "range";
+    opRange.min = "0";
+    opRange.max = "1";
+    opRange.step = "0.01";
+    opRange.value = String(L.opacity);
+
+    opRange.addEventListener("click", (e) => e.stopPropagation());
+    opRange.addEventListener("mousedown", (e) => e.stopPropagation());
+    opRange.addEventListener("touchstart", (e) => e.stopPropagation());
+    opRange.addEventListener("keydown", (e) => e.stopPropagation());
+
+    opRange.addEventListener("input", () => {
+      const v = parseFloat(opRange.value);
+      if (!Number.isNaN(v) && v !== L.opacity) {
+        L.opacity = Math.max(0, Math.min(1, v));
+        needsRedraw = true;
+      }
+    });
+
+    opacityRow.appendChild(opLabel);
+    opacityRow.appendChild(opRange);
+
+    // —— Compose row
+    el.appendChild(vis);
+    el.appendChild(nameWrap);
+    el.appendChild(ops);
+    el.appendChild(opacityRow);
+
+    // —— Row select
+    el.addEventListener("click", () => selectLayer(idx, L));
+
+    // newest on top in UI
+    list.prepend(el);
+  });
+}
+
+
+
+
+function removeActiveLayer() {
+  if (layers.length <= 1) { showStatusMessage("Need at least one layer", "warning"); return; }
+  const [removed] = layers.splice(activeLayerIndex, 1);
+  gl.deleteTexture(removed.texture);
+  gl.deleteFramebuffer(removed.fbo);
+  activeLayerIndex = Math.max(0, activeLayerIndex - 1);
+  syncActiveAliases();
+  rebuildLayersUI();
+  needsRedraw = true;
+}
+
+
+
+
+function moveLayerUp(idx) {
+  if (idx >= layers.length - 1) return;
+  [layers[idx], layers[idx+1]] = [layers[idx+1], layers[idx]];
+  if (activeLayerIndex === idx) activeLayerIndex = idx+1;
+  else if (activeLayerIndex === idx+1) activeLayerIndex = idx;
+  syncActiveAliases();                 // <<< keep aliases current
+  rebuildLayersUI();
+  needsRedraw = true;
+}
+function moveLayerDown(idx) {
+  if (idx <= 0) return;
+  [layers[idx], layers[idx-1]] = [layers[idx-1], layers[idx]];
+  if (activeLayerIndex === idx) activeLayerIndex = idx-1;
+  else if (activeLayerIndex === idx-1) activeLayerIndex = idx;
+  syncActiveAliases();                 // <<< keep aliases current
+  rebuildLayersUI();
+  needsRedraw = true;
+}
+
+
+document.getElementById("addLayerBtn").addEventListener("click", () => {
+  addLayer(`Layer ${layers.length+1}`, activeLayerIndex);
+});
+document.getElementById("removeLayerBtn").addEventListener("click", () => {
+  removeActiveLayer();
+});
+
 
 
 
@@ -1372,105 +2028,80 @@ function initFloodFillProgram() {
 }
 
 
-function performFloodFill(mouseX, mouseY) {
-    const pixelColor = new Uint8Array(4);
+function performFloodFill(fx, fy) {
+  const L = getActiveLayer();
+  if (!L) return;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.readPixels(mouseX, fixedFBOHeight - mouseY, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixelColor);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  // We pass fx, fy in FBO px with top-left origin.
+  // Convert to WebGL readPixels coords (bottom-left origin).
+  const ix = Math.max(0, Math.min(fixedFBOWidth  - 1, Math.round(fx)));
+  const iyTopLeft = Math.max(0, Math.min(fixedFBOHeight - 1, Math.round(fy)));
+  const iy = (fixedFBOHeight - 1) - iyTopLeft; // flip Y for readPixels
 
-    const targetColor = [
-        pixelColor[0] / 255.0,
-        pixelColor[1] / 255.0,
-        pixelColor[2] / 255.0,
-        pixelColor[3] / 255.0
-    ];
+  const pixel = new Uint8Array(4);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, L.fbo);
+  gl.readPixels(ix, iy, 1, 1, gl.RGBA, gl.UNSIGNED_BYTE, pixel);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    const fillColor = tintColor; // use the currently selected brush color
-
-    runFloodFillShader(targetColor, fillColor);
-
-    saveStrokeState(); // record to strokeHistory for undo/redo
-    needsRedraw = true;
+  const targetColor = [pixel[0]/255, pixel[1]/255, pixel[2]/255, pixel[3]/255];
+  runFloodFillShader(L, targetColor, tintColor);
+  saveStrokeState();
+  needsRedraw = true;
 }
 
+function runFloodFillShader(layer, targetColor, fillColor) {
+  const maxIterations = 50;
+  let sourceFBO = fillFBO1;
+  let destFBO   = fillFBO2;
 
-function runFloodFillShader(targetColor, fillColor) {
-    const maxIterations = 50;
-    let sourceFBO = fillFBO1;
-    let destFBO = fillFBO2;
+  // Step 1: copy layer → source
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, layer.fbo);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sourceFBO.fbo);
+  gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+  gl.blitFramebuffer(0,0,fixedFBOWidth,fixedFBOHeight, 0,0,fixedFBOWidth,fixedFBOHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
 
-    // Step 1: copy paintFBO → sourceFBO (initialize)
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, paintFBO);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, sourceFBO.fbo);
+  // fullscreen quad
+  const floodVertices = new Float32Array([-1,-1, 1,-1, -1,1,  -1,1, 1,-1, 1,1]);
+  const floodBuffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, floodBuffer);
+  gl.bufferData(gl.ARRAY_BUFFER, floodVertices, gl.STATIC_DRAW);
+
+  const posLoc = gl.getAttribLocation(floodFillProgram, "aPosition");
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+  for (let i = 0; i < maxIterations; i++) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.fbo);
     gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
 
-    gl.blitFramebuffer(
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        gl.COLOR_BUFFER_BIT,
-        gl.NEAREST
-    );
+    gl.useProgram(floodFillProgram);
 
-    // Create full-screen quad buffer
-    const floodVertices = new Float32Array([
-        -1, -1,
-         1, -1,
-        -1,  1,
-        -1,  1,
-         1, -1,
-         1,  1
-    ]);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sourceFBO.texture);
+    gl.uniform1i(gl.getUniformLocation(floodFillProgram, "uSource"), 0);
 
-    const floodBuffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, floodBuffer);
-    gl.bufferData(gl.ARRAY_BUFFER, floodVertices, gl.STATIC_DRAW);
+    gl.uniform4fv(gl.getUniformLocation(floodFillProgram, "uTargetColor"), targetColor);
+    gl.uniform4fv(gl.getUniformLocation(floodFillProgram, "uFillColor"), fillColor);
+    gl.uniform2f(gl.getUniformLocation(floodFillProgram, "uTexelSize"),
+                 1.0 / fixedFBOWidth, 1.0 / fixedFBOHeight);
 
-    const posLoc = gl.getAttribLocation(floodFillProgram, "aPosition");
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+    gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    // Step 2: iterative passes
-    for (let i = 0; i < maxIterations; i++) {
-        gl.bindFramebuffer(gl.FRAMEBUFFER, destFBO.fbo);
-        gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+    // swap
+    let tmp = sourceFBO; sourceFBO = destFBO; destFBO = tmp;
+  }
 
-        gl.useProgram(floodFillProgram);
+  // copy result → layer
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, sourceFBO.fbo);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, layer.fbo);
+  gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+  gl.blitFramebuffer(0,0,fixedFBOWidth,fixedFBOHeight, 0,0,fixedFBOWidth,fixedFBOHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
 
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, sourceFBO.texture);
-        gl.uniform1i(gl.getUniformLocation(floodFillProgram, "uSource"), 0);
-
-        gl.uniform4fv(gl.getUniformLocation(floodFillProgram, "uTargetColor"), targetColor);
-        gl.uniform4fv(gl.getUniformLocation(floodFillProgram, "uFillColor"), fillColor);
-        gl.uniform2f(gl.getUniformLocation(floodFillProgram, "uTexelSize"), 1.0 / fixedFBOWidth, 1.0 / fixedFBOHeight);
-
-        gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-        // Swap FBOs
-        let temp = sourceFBO;
-        sourceFBO = destFBO;
-        destFBO = temp;
-    }
-
-    // Step 3: copy result → paintFBO
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, sourceFBO.fbo);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, paintFBO);
-    gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
-
-    gl.blitFramebuffer(
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        gl.COLOR_BUFFER_BIT,
-        gl.NEAREST
-    );
-
-    // Cleanup
-    gl.disableVertexAttribArray(posLoc);
-    gl.deleteBuffer(floodBuffer);
-
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.disableVertexAttribArray(posLoc);
+  gl.deleteBuffer(floodBuffer);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
+
 
 
 
@@ -1539,61 +2170,80 @@ function initFloodFBOs() {
 let strokeCount = 0;
 const FLATTEN_THRESHOLD = isMobile() ? 50 : 150;
 
+
 function flattenStrokes() {
+  console.log("flattenStrokes", strokeCount);
 
-    console.log("flattenStrokes", strokeCount)
+  const L = getActiveLayer();
+  if (!L || !L.fbo || !L.texture) return;
 
-    // Create a new texture to hold the merged strokes.
-    const mergedTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, mergedTexture);
-    gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        fixedFBOWidth,
-        fixedFBOHeight,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null
-    );
-    // Use NEAREST filtering for a 1:1 copy.
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const w = fixedFBOWidth;
+  const h = fixedFBOHeight;
 
-    // Create a framebuffer for the merged texture.
-    const mergeFBO = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, mergeFBO);
-    gl.framebufferTexture2D(
-        gl.DRAW_FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        mergedTexture,
-        0
-    );
+  // 1) Create a new texture + FBO to hold the merged result (use LINEAR filtering)
+  const mergedTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, mergedTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
 
-    // Bind the current persistent paint layer for reading.
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, paintFBO);
-    gl.blitFramebuffer(
-        0, 0, fixedFBOWidth, fixedFBOHeight, // source rectangle (fixed resolution)
-        0, 0, fixedFBOWidth, fixedFBOHeight, // destination rectangle (fixed resolution)
-        gl.COLOR_BUFFER_BIT,
-        gl.NEAREST
-    );
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  // Linear filtering so the layer renders smoothly when scaled on screen
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    // Replace the old persistent paint layer with the merged one.
-    gl.deleteTexture(paintTexture);
-    gl.deleteFramebuffer(paintFBO);
-    paintTexture = mergedTexture;
-    paintFBO = mergeFBO;
+  const mergeFBO = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, mergeFBO);
+  gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, mergedTexture, 0);
 
-    // Reset the stroke counter.
-    strokeCount = 0;
+  // Safety: ensure FBO is complete before proceeding
+  const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+  if (status !== gl.FRAMEBUFFER_COMPLETE) {
+    console.warn("flattenStrokes: mergeFBO incomplete:", status);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.deleteFramebuffer(mergeFBO);
+    gl.deleteTexture(mergedTexture);
+    return;
+  }
+
+  // 2) Copy the current active layer (L.fbo) -> mergeFBO
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, L.fbo);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, mergeFBO);
+  gl.blitFramebuffer(
+    0, 0, w, h,
+    0, 0, w, h,
+    gl.COLOR_BUFFER_BIT,
+    gl.NEAREST
+  );
+
+  // 3) Unbind
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.bindTexture(gl.TEXTURE_2D, null);
+
+  // 4) Swap into the layer, then delete the old objects
+  const oldTex = L.texture;
+  const oldFbo = L.fbo;
+
+  L.texture = mergedTexture;
+  L.fbo = mergeFBO;
+
+  if (oldTex) gl.deleteTexture(oldTex);
+  if (oldFbo) gl.deleteFramebuffer(oldFbo);
+
+  // 5) Keep aliases in sync so stamping keeps working
+  if (typeof syncActiveAliases === "function") {
+    syncActiveAliases();
+  }
+
+  // 6) Reset counter and request redraw
+  strokeCount = 0;
+  if (typeof needsRedraw !== "undefined") {
+    needsRedraw = true;
+  }
 }
+
+
 
 // Draw a brush stroke into the persistent paint layer (offscreen).
 // x and y are in pixel coordinates (with (0,0) at top left).
@@ -1617,123 +2267,102 @@ let redoHistory = [];
 
 let currentLineGroup = null;
 
+
+
+
 function saveStrokeState() {
-    const backupTexture = gl.createTexture();
-    gl.bindTexture(gl.TEXTURE_2D, backupTexture);
-    gl.texImage2D(
-        gl.TEXTURE_2D,
-        0,
-        gl.RGBA,
-        fixedFBOWidth,
-        fixedFBOHeight,
-        0,
-        gl.RGBA,
-        gl.UNSIGNED_BYTE,
-        null
-    );
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  const L = getActiveLayer();
 
-    const backupFBO = gl.createFramebuffer();
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, backupFBO);
-    gl.framebufferTexture2D(
-        gl.DRAW_FRAMEBUFFER,
-        gl.COLOR_ATTACHMENT0,
-        gl.TEXTURE_2D,
-        backupTexture,
-        0
-    );
+  const backupTexture = gl.createTexture();
+  gl.bindTexture(gl.TEXTURE_2D, backupTexture);
+  gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, fixedFBOWidth, fixedFBOHeight, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
 
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, paintFBO);
-    gl.blitFramebuffer(
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        0, 0, fixedFBOWidth, fixedFBOHeight,
-        gl.COLOR_BUFFER_BIT,
-        gl.NEAREST
-    );
-    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  const backupFBO = gl.createFramebuffer();
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, backupFBO);
+  gl.framebufferTexture2D(gl.DRAW_FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, backupTexture, 0);
 
-    const step = { texture: backupTexture, fbo: backupFBO };
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, L.fbo);
+  gl.blitFramebuffer(0,0,fixedFBOWidth,fixedFBOHeight, 0,0,fixedFBOWidth,fixedFBOHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
 
-    if (currentLineGroup) {
-        currentLineGroup.push(step);
-    } else {
-        strokeHistory.push([step]);
-        if (strokeHistory.length > UNDO_STEPS) {
-            const removedGroup = strokeHistory.shift();
-            if (removedGroup) {
-                removedGroup.forEach(removed => {
-                    if (removed.texture) gl.deleteTexture(removed.texture);
-                    if (removed.fbo) gl.deleteFramebuffer(removed.fbo);
-                });
-            }
-        }
-        redoHistory = [];
+  const step = { texture: backupTexture, fbo: backupFBO };
+
+  if (currentLineGroup) {
+    currentLineGroup.push(step);
+  } else {
+    strokeHistory.push([step]);
+    if (strokeHistory.length > UNDO_STEPS) {
+      const removedGroup = strokeHistory.shift();
+      if (removedGroup) {
+        removedGroup.forEach(removed => {
+          if (removed.texture) gl.deleteTexture(removed.texture);
+          if (removed.fbo) gl.deleteFramebuffer(removed.fbo);
+        });
+      }
     }
+    redoHistory = [];
+  }
 
-    const totalMB = estimateUndoMemoryMB();
-    console.log(`🧠 GPU Undo Memory: ${totalMB.toFixed(1)} MB`);
+  const totalMB = estimateUndoMemoryMB();
+  console.log(`🧠 GPU Undo Memory: ${totalMB.toFixed(1)} MB`);
 }
 
+
+
+
+
+
 function undoStroke() {
-    console.log("undoStroke", strokeHistory.length);
+  if (strokeHistory.length === 0) return;
 
-    if (strokeHistory.length > 0) {
-        const lastGroup = strokeHistory.pop();
-        redoHistory.push(lastGroup);
+  const L = getActiveLayer();
+  const lastGroup = strokeHistory.pop();
+  redoHistory.push(lastGroup);
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-        gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
-        gl.clear(gl.COLOR_BUFFER_BIT);
+  // clear active layer
+  gl.bindFramebuffer(gl.FRAMEBUFFER, L.fbo);
+  gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+  gl.clearColor(0,0,0,0);
+  gl.clear(gl.COLOR_BUFFER_BIT);
 
-        if (strokeHistory.length > 0) {
-            const previousGroup = strokeHistory[strokeHistory.length - 1];
-            const lastStep = previousGroup[previousGroup.length - 1];
+  if (strokeHistory.length > 0) {
+    const previousGroup = strokeHistory[strokeHistory.length - 1];
+    const lastStep = previousGroup[previousGroup.length - 1];
 
-            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, lastStep.fbo);
-            gl.blitFramebuffer(
-                0, 0, fixedFBOWidth, fixedFBOHeight,
-                0, 0, fixedFBOWidth, fixedFBOHeight,
-                gl.COLOR_BUFFER_BIT,
-                gl.NEAREST
-            );
-            gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-        } else {
-            gl.clearColor(1, 1, 1, 0);
-            gl.clear(gl.COLOR_BUFFER_BIT);
-        }
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, lastStep.fbo);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, L.fbo);
+    gl.blitFramebuffer(0,0,fixedFBOWidth,fixedFBOHeight, 0,0,fixedFBOWidth,fixedFBOHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+    gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+    gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  }
 
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-        needsRedraw = true;
-        showStatusMessage("Undo", "info");
-    }
+  needsRedraw = true;
+  showStatusMessage("Undo", "info");
 }
 
 function redoStroke() {
-    if (redoHistory.length > 0) {
-        const redoGroup = redoHistory.pop();
-        strokeHistory.push(redoGroup);
+  if (redoHistory.length === 0) return;
 
-        const lastStep = redoGroup[redoGroup.length - 1];
+  const L = getActiveLayer();
+  const redoGroup = redoHistory.pop();
+  strokeHistory.push(redoGroup);
+  const lastStep = redoGroup[redoGroup.length - 1];
 
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, lastStep.fbo);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, paintFBO);
-        gl.blitFramebuffer(
-            0, 0, fixedFBOWidth, fixedFBOHeight,
-            0, 0, fixedFBOWidth, fixedFBOHeight,
-            gl.COLOR_BUFFER_BIT,
-            gl.NEAREST
-        );
-        gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
-        gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, lastStep.fbo);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, L.fbo);
+  gl.blitFramebuffer(0,0,fixedFBOWidth,fixedFBOHeight, 0,0,fixedFBOWidth,fixedFBOHeight, gl.COLOR_BUFFER_BIT, gl.NEAREST);
+  gl.bindFramebuffer(gl.READ_FRAMEBUFFER, null);
+  gl.bindFramebuffer(gl.DRAW_FRAMEBUFFER, null);
 
-        needsRedraw = true;
-        showStatusMessage("Redo", "info");
-    }
+  needsRedraw = true;
+  showStatusMessage("Redo", "info");
 }
+
 
 
 
@@ -1930,166 +2559,231 @@ let lastFx = null,
     lastFy = null; // Store previous fixed‑FBO coordinates
 
 
+
 function drawSingleBrushStamp(fx, fy, sizeOverride = null, angleOverride = null) {
-    const brushW = (sizeOverride ?? brushSize) * fixedFBOWidth;
-    const brushH = brushW / brushAspect;
-    const halfW = brushW / 2;
-    const halfH = brushH / 2;
+  const brushW = (sizeOverride ?? brushSize) * fixedFBOWidth;
+  const brushH = brushW / brushAspect;
+  const halfW = brushW / 2;
+  const halfH = brushH / 2;
 
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
-    gl.enable(gl.BLEND);
-    gl.useProgram(paintProgram);
+  const L = getActiveLayer();
+  gl.bindFramebuffer(gl.FRAMEBUFFER, L.fbo);   // <<< paint into active layer
+  gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+  gl.enable(gl.BLEND);
+  gl.useProgram(paintProgram);
 
-    const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
-    gl.uniform1i(eraseUniform, isErasing ? 1 : 0);
+  const eraseUniform = gl.getUniformLocation(paintProgram, "u_erase");
+  gl.uniform1i(eraseUniform, isErasing ? 1 : 0);
+  const eraseStrengthUniform = gl.getUniformLocation(paintProgram, "u_eraseStrength");
+  gl.uniform1f(eraseStrengthUniform, eraseStrength);
+  const paintStrengthLoc = gl.getUniformLocation(paintProgram, "u_paintStrength");
+  gl.uniform1f(paintStrengthLoc, paintStrength);
 
-    const eraseStrengthUniform = gl.getUniformLocation(paintProgram, "u_eraseStrength");
-    gl.uniform1f(eraseStrengthUniform, eraseStrength);
+  if (isErasing) {
+    gl.blendFuncSeparate(gl.ZERO, gl.ONE, gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
+  } else {
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  }
 
-    const paintStrengthLoc = gl.getUniformLocation(paintProgram, "u_paintStrength");
-    gl.uniform1f(paintStrengthLoc, paintStrength);
+  const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
+  gl.uniform1f(flipLoc, 1.0);
 
-    if (isErasing) {
-        gl.blendFuncSeparate(gl.ZERO, gl.ONE, gl.ZERO, gl.ONE_MINUS_SRC_ALPHA);
-    } else {
-        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    }
+  const resLoc = gl.getUniformLocation(paintProgram, "u_resolution");
+  gl.uniform2f(resLoc, fixedFBOWidth, fixedFBOHeight);
+  const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
+  gl.uniform4fv(tintLoc, tintColor);
 
-    const flipLoc = gl.getUniformLocation(paintProgram, "u_flipY");
-    gl.uniform1f(flipLoc, 1.0);
+  const offsets = [
+    { x: -halfW, y: -halfH }, { x: halfW,  y: -halfH },
+    { x: -halfW, y:  halfH }, { x: halfW,  y:  halfH }
+  ];
 
-    const resLoc = gl.getUniformLocation(paintProgram, "u_resolution");
-    gl.uniform2f(resLoc, fixedFBOWidth, fixedFBOHeight);
+  const angle = angleOverride ?? currentAngle;
+  const cosA = Math.cos(angle), sinA = Math.sin(angle);
+  const rotated = offsets.map(off => ({ x: off.x * cosA - off.y * sinA, y: off.x * sinA + off.y * cosA }));
 
-    const tintLoc = gl.getUniformLocation(paintProgram, "u_tint");
-    gl.uniform4fv(tintLoc, tintColor);
+  const v0 = { x: fx + rotated[0].x, y: fy + rotated[0].y };
+  const v1 = { x: fx + rotated[1].x, y: fy + rotated[1].y };
+  const v2 = { x: fx + rotated[2].x, y: fy + rotated[2].y };
+  const v3 = { x: fx + rotated[3].x, y: fy + rotated[3].y };
 
-    const offsets = [
-        { x: -halfW, y: -halfH },
-        { x: halfW,  y: -halfH },
-        { x: -halfW, y: halfH },
-        { x: halfW,  y: halfH }
-    ];
+  const vertices = new Float32Array([
+    v0.x, v0.y, 0, 0,  v1.x, v1.y, 1, 0,  v2.x, v2.y, 0, 1,
+    v2.x, v2.y, 0, 1,  v1.x, v1.y, 1, 0,  v3.x, v3.y, 1, 1
+  ]);
 
-    const angle = angleOverride ?? currentAngle;
-    const cosA = Math.cos(angle);
-    const sinA = Math.sin(angle);
+  const buffer = gl.createBuffer();
+  gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
+  gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
 
-    const rotated = offsets.map(off => ({
-        x: off.x * cosA - off.y * sinA,
-        y: off.x * sinA + off.y * cosA
-    }));
+  const posLoc = gl.getAttribLocation(paintProgram, "a_position");
+  gl.enableVertexAttribArray(posLoc);
+  gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+  const texLoc = gl.getAttribLocation(paintProgram, "a_texCoord");
+  gl.enableVertexAttribArray(texLoc);
+  gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
 
-    const v0 = { x: fx + rotated[0].x, y: fy + rotated[0].y };
-    const v1 = { x: fx + rotated[1].x, y: fy + rotated[1].y };
-    const v2 = { x: fx + rotated[2].x, y: fy + rotated[2].y };
-    const v3 = { x: fx + rotated[3].x, y: fy + rotated[3].y };
+  gl.activeTexture(gl.TEXTURE0);
+  gl.bindTexture(gl.TEXTURE_2D, overlayTexture);
+  gl.uniform1i(gl.getUniformLocation(paintProgram, "u_brush"), 0);
 
-    const vertices = new Float32Array([
-        v0.x, v0.y, 0, 0,
-        v1.x, v1.y, 1, 0,
-        v2.x, v2.y, 0, 1,
-        v2.x, v2.y, 0, 1,
-        v1.x, v1.y, 1, 0,
-        v3.x, v3.y, 1, 1
-    ]);
+  gl.drawArrays(gl.TRIANGLES, 0, 6);
 
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, vertices, gl.STREAM_DRAW);
-
-    const posLoc = gl.getAttribLocation(paintProgram, "a_position");
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-
-    const texLoc = gl.getAttribLocation(paintProgram, "a_texCoord");
-    gl.enableVertexAttribArray(texLoc);
-    gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, overlayTexture);
-
-    const brushUniform = gl.getUniformLocation(paintProgram, "u_brush");
-    gl.uniform1i(brushUniform, 0);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-
-    gl.deleteBuffer(buffer);
-    gl.disableVertexAttribArray(posLoc);
-    gl.disableVertexAttribArray(texLoc);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+  gl.deleteBuffer(buffer);
+  gl.disableVertexAttribArray(posLoc);
+  gl.disableVertexAttribArray(texLoc);
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 }
+
+
+
+
+// function drawBrushStrokeToPaintLayer(x, y) {
+
+//     //saveStrokeState();
+
+//     const scaleX = fixedFBOWidth / canvas.width;
+//     const scaleY = fixedFBOHeight / canvas.height;
+//     const fx = x * scaleX;
+//     const fy = y * scaleY;
+
+//     if (lastX !== null && lastY !== null) {
+//         const dx = x - lastX;
+//         const dy = y - lastY;
+//         if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+//             currentAngle = Math.atan2(dy, dx);
+//         }
+//     }
+//     lastX = x;
+//     lastY = y;
+
+//     // Apply reverse mode
+//     let actualAngle = currentAngle;
+//     if (reverseModeEnabled) {
+//         actualAngle += Math.PI;
+//     }
+
+//     let sizeMultiplier = 1.0;
+//     if (dynamicModeEnabled) {
+//         sizeMultiplier = intuitiveMode
+//             ? (0.8 + Math.random() * 0.8)
+//             : (1.5 - Math.random());
+//     }
+
+//     if (lineMode && lastFx !== null && lastFy !== null) {
+//         const dxFixed = fx - lastFx;
+//         const dyFixed = fy - lastFy;
+//         const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+
+//         const baseBrushW = brushSize * fixedFBOWidth;
+//         let stepSize = baseBrushW * lineStepFactor;
+
+//         const speedFactor = Math.min(2.5, dist / (baseBrushW * 0.3));
+//         let dynamicBrushSize = brushSize * speedFactor * sizeMultiplier;
+
+//         stepSize *= speedFactor * sizeMultiplier;
+
+//         const steps = Math.max(1, Math.floor(dist / stepSize));
+//         for (let i = 0; i <= steps; i++) {
+//             const interpX = lastFx + (dxFixed * i) / steps;
+//             const interpY = lastFy + (dyFixed * i) / steps;
+
+//             drawSingleBrushStamp(interpX, interpY, dynamicBrushSize, actualAngle);
+//         }
+//     } else {
+//         drawSingleBrushStamp(fx, fy, brushSize * sizeMultiplier, actualAngle);
+//     }
+
+//     lastFx = fx;
+//     lastFy = fy;
+
+//     strokeCount++;
+//     if (strokeCount >= FLATTEN_THRESHOLD) {
+//         flattenStrokes();
+//     }
+
+//     needsRedraw = true;
+// }
+
 
 
 
 function drawBrushStrokeToPaintLayer(x, y) {
+  // x,y are CANVAS pixel coords (not screen; not FBO)
 
-    //saveStrokeState();
+  // guard rails
+  if (!gl || !layers.length || !overlayTexture || !getActiveLayer()) return;
 
-    const scaleX = fixedFBOWidth / canvas.width;
-    const scaleY = fixedFBOHeight / canvas.height;
-    const fx = x * scaleX;
-    const fy = y * scaleY;
+  // clamp to canvas
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return;
+  if (x < 0 || y < 0 || x > canvas.width || y > canvas.height) return;
 
-    if (lastX !== null && lastY !== null) {
-        const dx = x - lastX;
-        const dy = y - lastY;
-        if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
-            currentAngle = Math.atan2(dy, dx);
-        }
+  // canvas → fixed FBO
+  const scaleX = fixedFBOWidth  / canvas.width;
+  const scaleY = fixedFBOHeight / canvas.height;
+  const fx = x * scaleX;
+  const fy = y * scaleY;
+
+  // update stroke angle from last *canvas* position
+  if (lastX !== null && lastY !== null) {
+    const dx = x - lastX;
+    const dy = y - lastY;
+    if (Math.abs(dx) > 0.1 || Math.abs(dy) > 0.1) {
+      currentAngle = Math.atan2(dy, dx);
     }
-    lastX = x;
-    lastY = y;
+  }
+  lastX = x;
+  lastY = y;
 
-    // Apply reverse mode
-    let actualAngle = currentAngle;
-    if (reverseModeEnabled) {
-        actualAngle += Math.PI;
+  // reverse mode
+  let actualAngle = currentAngle;
+  if (reverseModeEnabled) actualAngle += Math.PI;
+
+  // dynamic size modulation
+  let sizeMultiplier = 1.0;
+  if (dynamicModeEnabled) {
+    sizeMultiplier = intuitiveMode
+      ? (0.8 + Math.random() * 0.8) // 0.8–1.6
+      : (1.5 - Math.random());      // 0.5–1.5
+  }
+
+  // line interpolation in FBO space
+  if (lineMode && lastFx !== null && lastFy !== null) {
+    const dxF = fx - lastFx;
+    const dyF = fy - lastFy;
+    const dist = Math.hypot(dxF, dyF);
+
+    const baseBrushW = Math.max(1, brushSize * fixedFBOWidth);
+    let stepSize = baseBrushW * lineStepFactor;
+
+    const denom = Math.max(1e-6, baseBrushW * 0.3);
+    const speedFactor = Math.min(2.5, dist / denom);
+    const dynamicBrushSize = brushSize * speedFactor * sizeMultiplier;
+
+    stepSize *= speedFactor * sizeMultiplier;
+
+    const steps = Math.max(1, Math.floor(dist / Math.max(1e-6, stepSize)));
+    for (let i = 0; i <= steps; i++) {
+      const t = i / steps;
+      const ix = lastFx + dxF * t;
+      const iy = lastFy + dyF * t;
+      drawSingleBrushStamp(ix, iy, dynamicBrushSize, actualAngle);
     }
+  } else {
+    // single stamp at current FBO coord
+    drawSingleBrushStamp(fx, fy, brushSize * sizeMultiplier, actualAngle);
+  }
 
-    let sizeMultiplier = 1.0;
-    if (dynamicModeEnabled) {
-        sizeMultiplier = intuitiveMode
-            ? (0.8 + Math.random() * 0.8)
-            : (1.5 - Math.random());
-    }
+  // advance FBO cursor
+  lastFx = fx;
+  lastFy = fy;
 
-    if (lineMode && lastFx !== null && lastFy !== null) {
-        const dxFixed = fx - lastFx;
-        const dyFixed = fy - lastFy;
-        const dist = Math.sqrt(dxFixed * dxFixed + dyFixed * dyFixed);
+  // flatten if needed
+  strokeCount++;
+  if (strokeCount >= FLATTEN_THRESHOLD) flattenStrokes();
 
-        const baseBrushW = brushSize * fixedFBOWidth;
-        let stepSize = baseBrushW * lineStepFactor;
-
-        const speedFactor = Math.min(2.5, dist / (baseBrushW * 0.3));
-        let dynamicBrushSize = brushSize * speedFactor * sizeMultiplier;
-
-        stepSize *= speedFactor * sizeMultiplier;
-
-        const steps = Math.max(1, Math.floor(dist / stepSize));
-        for (let i = 0; i <= steps; i++) {
-            const interpX = lastFx + (dxFixed * i) / steps;
-            const interpY = lastFy + (dyFixed * i) / steps;
-
-            drawSingleBrushStamp(interpX, interpY, dynamicBrushSize, actualAngle);
-        }
-    } else {
-        drawSingleBrushStamp(fx, fy, brushSize * sizeMultiplier, actualAngle);
-    }
-
-    lastFx = fx;
-    lastFy = fy;
-
-    strokeCount++;
-    if (strokeCount >= FLATTEN_THRESHOLD) {
-        flattenStrokes();
-    }
-
-    needsRedraw = true;
+  needsRedraw = true;
 }
-
 
 
 
@@ -2166,174 +2860,99 @@ function drawBrushOverlay() {
 }
 
 
+
+
+
+
+
 function drawScene() {
+  if (!gl || !quadProgram) return;
+
+  // ----- prepare backbuffer -----
   gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   gl.viewport(0, 0, canvas.width, canvas.height);
-  gl.clearColor(0, 0, 0, 0); // Transparent base
+  gl.clearColor(0, 0, 0, 0);
   gl.clear(gl.COLOR_BUFFER_BIT);
 
-  // --- 1. Draw background image ---
-  if (texture) {
-    gl.useProgram(quadProgram);
+  // Shared fullscreen quad (in screen pixels)
+  const quadVertices = new Float32Array([
+    0, 0, 0, 0,
+    canvas.width, 0, 1, 0,
+    0, canvas.height, 0, 1,
 
-    const flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-    gl.uniform1f(flipLoc, -1.0);
-    const resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
-    gl.uniform2f(resLoc, canvas.width, canvas.height);
+    0, canvas.height, 0, 1,
+    canvas.width, 0, 1, 0,
+    canvas.width, canvas.height, 1, 1
+  ]);
 
-    const quadVertices = new Float32Array([
-      0, 0, 0, 0,
-      canvas.width, 0, 1, 0,
-      0, canvas.height, 0, 1,
-      0, canvas.height, 0, 1,
-      canvas.width, 0, 1, 0,
-      canvas.width, canvas.height, 1, 1
-    ]);
-
+  // Helper to draw a texture with a program
+  function drawTexturedQuad(program, tex) {
     const buffer = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
 
-    const posLoc = gl.getAttribLocation(quadProgram, "a_position");
+    const posLoc = gl.getAttribLocation(program, "a_position");
+    const texLoc = gl.getAttribLocation(program, "a_texCoord");
+
     gl.enableVertexAttribArray(posLoc);
     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
 
-    const texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
     gl.enableVertexAttribArray(texLoc);
     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
 
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, texture);
-    const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
-    gl.uniform1i(texUniform, 0);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    const uTex = gl.getUniformLocation(program, "u_texture") ?? gl.getUniformLocation(program, "u_brush");
+    if (uTex) gl.uniform1i(uTex, 0);
 
-    gl.disable(gl.BLEND); // No blending needed for background
     gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+    gl.disableVertexAttribArray(posLoc);
+    gl.disableVertexAttribArray(texLoc);
+    gl.bindBuffer(gl.ARRAY_BUFFER, null);
     gl.deleteBuffer(buffer);
   }
 
-  // --- 2. Draw persistent paint layer with blending ---
-  if (paintTexture) {
-    gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+  // ----- 1) Background image -----
+  if (texture && gl.isTexture(texture)) {
     gl.useProgram(quadProgram);
+    gl.uniform1f(gl.getUniformLocation(quadProgram, "u_flipY"), -1.0);
+    gl.uniform2f(gl.getUniformLocation(quadProgram, "u_resolution"), canvas.width, canvas.height);
+    const uLayerOpacity = gl.getUniformLocation(quadProgram, "u_layerOpacity");
+    if (uLayerOpacity) gl.uniform1f(uLayerOpacity, 1.0);
 
-    const flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-    gl.uniform1f(flipLoc, -1.0);
-    const resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
-    gl.uniform2f(resLoc, canvas.width, canvas.height);
-
-    const quadVertices = new Float32Array([
-      0, 0, 0, 0,
-      canvas.width, 0, 1, 0,
-      0, canvas.height, 0, 1,
-      0, canvas.height, 0, 1,
-      canvas.width, 0, 1, 0,
-      canvas.width, canvas.height, 1, 1
-    ]);
-
-    const buffer = gl.createBuffer();
-    gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-    gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-
-    const posLoc = gl.getAttribLocation(quadProgram, "a_position");
-    gl.enableVertexAttribArray(posLoc);
-    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-
-    const texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-    gl.enableVertexAttribArray(texLoc);
-    gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-    const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
-    gl.uniform1i(texUniform, 0);
-
-    gl.drawArrays(gl.TRIANGLES, 0, 6);
-    gl.deleteBuffer(buffer);
     gl.disable(gl.BLEND);
+    drawTexturedQuad(quadProgram, texture);
   }
 
-  // --- 3. Draw brush overlay (preview cursor) ---
-  if (overlayProgram) {
+  // ----- 2) Layers (bottom -> top) with opacity in shader -----
+  gl.enable(gl.BLEND);
+  gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); // standard over
+
+  for (let i = 0; i < layers.length; i++) {
+    const L = layers[i];
+    if (!L || !L.visible || L.opacity <= 0) continue;
+    if (!L.texture || !gl.isTexture(L.texture)) continue;
+
+    gl.useProgram(quadProgram);
+    gl.uniform1f(gl.getUniformLocation(quadProgram, "u_flipY"), -1.0);
+    gl.uniform2f(gl.getUniformLocation(quadProgram, "u_resolution"), canvas.width, canvas.height);
+    const uLayerOpacity = gl.getUniformLocation(quadProgram, "u_layerOpacity");
+    if (uLayerOpacity) gl.uniform1f(uLayerOpacity, Math.max(0, Math.min(1, L.opacity)));
+
+    drawTexturedQuad(quadProgram, L.texture);
+  }
+
+  gl.disable(gl.BLEND);
+
+  // ----- 3) Brush overlay preview (if we have a valid brush texture) -----
+  if (overlayProgram && overlayTexture && gl.isTexture(overlayTexture)) {
     gl.useProgram(overlayProgram);
-    const flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
-    gl.uniform1f(flipLoc, -1.0);
-    const resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
-    gl.uniform2f(resLoc, canvas.width, canvas.height);
+    gl.uniform1f(gl.getUniformLocation(overlayProgram, "u_flipY"), -1.0);
+    gl.uniform2f(gl.getUniformLocation(overlayProgram, "u_resolution"), canvas.width, canvas.height);
     drawBrushOverlay();
   }
 }
-
-
-
-// // Update drawScene by removing the internal requestAnimationFrame call:
-// function drawScene() {
-//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-//     gl.viewport(0, 0, canvas.width, canvas.height);
-//     gl.clearColor(1, 1, 1, 1);
-//     gl.clear(gl.COLOR_BUFFER_BIT);
-
-//     // Draw background image using quadProgram
-//     gl.useProgram(quadProgram);
-//     let flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     let resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-//     const quadVertices = new Float32Array([
-//         0, 0, 0, 0,
-//         canvas.width, 0, 1, 0,
-//         0, canvas.height, 0, 1,
-//         0, canvas.height, 0, 1,
-//         canvas.width, 0, 1, 0,
-//         canvas.width, canvas.height, 1, 1
-//     ]);
-//     let buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-//     let posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-//     let texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, texture);
-//     const texUniform = gl.getUniformLocation(quadProgram, "u_texture");
-//     gl.uniform1i(texUniform, 0);
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-
-//     // Draw persistent paint layer
-//     gl.enable(gl.BLEND);
-//     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-//     gl.useProgram(quadProgram);
-//     flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     buffer = gl.createBuffer();
-//     gl.bindBuffer(gl.ARRAY_BUFFER, buffer);
-//     gl.bufferData(gl.ARRAY_BUFFER, quadVertices, gl.STATIC_DRAW);
-//     posLoc = gl.getAttribLocation(quadProgram, "a_position");
-//     gl.enableVertexAttribArray(posLoc);
-//     gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
-//     texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
-//     gl.enableVertexAttribArray(texLoc);
-//     gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
-//     gl.activeTexture(gl.TEXTURE0);
-//     gl.bindTexture(gl.TEXTURE_2D, paintTexture);
-//     gl.uniform1i(texUniform, 0);
-//     gl.drawArrays(gl.TRIANGLES, 0, 6);
-//     gl.deleteBuffer(buffer);
-//     gl.disable(gl.BLEND);
-
-//     // Draw brush overlay
-//     gl.useProgram(overlayProgram);
-//     flipLoc = gl.getUniformLocation(overlayProgram, "u_flipY");
-//     gl.uniform1f(flipLoc, -1.0);
-//     resLoc = gl.getUniformLocation(overlayProgram, "u_resolution");
-//     gl.uniform2f(resLoc, canvas.width, canvas.height);
-//     drawBrushOverlay();
-// }
 
 
 //–––––––––––––––––––
@@ -2450,7 +3069,9 @@ function downscaleImageToWindow(image) {
 //–––––––––––––––––––
 
 imageLoader.addEventListener("change", (event) => {
+  
   console.log("[DEBUG] imageLoader change event fired:", event);
+  
   const file = event.target.files[0];
   if (file) {
     console.log("[DEBUG] Selected file:", file.name, file.type, file.size);
@@ -2477,32 +3098,69 @@ reader.onload = (e) => {
       console.log("[DEBUG] Downscaled image to window dimensions.");
       img.src = downscaledDataUrl;
       // Once the downscaled image is loaded, use it:
-      img.onload = () => {
-        console.log("[DEBUG] Downscaled image loaded. Dimensions:", img.width, img.height);
-        currentImage = img;
-        fixedFBOWidth = img.width;
-        fixedFBOHeight = img.height;
-        console.log("[DEBUG] Calling initPaintLayerFixed()");
-        initPaintLayerFixed();
-        initFloodFillProgram();
-        console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
-        updateCanvasSize(currentImage);
-        console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
-        createTextureFromImage(currentImage);
-      };
-    } else {
-      console.log("[DEBUG] No downscaling needed.");
-      currentImage = img;
-      fixedFBOWidth = img.width;
-      fixedFBOHeight = img.height;
-      console.log("[DEBUG] Calling initPaintLayerFixed()");
-      initPaintLayerFixed();
-      initFloodFillProgram();
-      console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
-      updateCanvasSize(currentImage);
-      console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
-      createTextureFromImage(currentImage);
-    }
+
+
+        img.onload = () => {
+          console.log("[DEBUG] Downscaled image loaded. Dimensions:", img.width, img.height);
+          currentImage = img;
+          fixedFBOWidth = img.width;
+          fixedFBOHeight = img.height;
+
+          console.log("[DEBUG] Calling initPaintLayerFixed()");
+          initPaintLayerFixed();
+          initFloodFillProgram();
+
+          console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+          updateCanvasSize(currentImage);
+
+          console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+          createTextureFromImage(currentImage);
+
+          // ---- force layout, then center (no timers) ----
+          void canvas.offsetWidth; 
+          void canvasWrapper.offsetWidth;
+          zoomScale = 1;
+          panX = (canvasWrapper.clientWidth  - canvas.width ) / 2;
+          panY = (canvasWrapper.clientHeight - canvas.height) / 2;
+          updateCanvasTransform();
+          resetStrokeState();
+          needsRedraw = true;
+          // -----------------------------------------------
+        };
+
+
+
+
+        } else {
+          console.log("[DEBUG] No downscaling needed.");
+          currentImage = img;
+          fixedFBOWidth = img.width;
+          fixedFBOHeight = img.height;
+
+          console.log("[DEBUG] Calling initPaintLayerFixed()");
+          initPaintLayerFixed();
+          initFloodFillProgram();
+
+          console.log("[DEBUG] Calling updateCanvasSize(currentImage)");
+          updateCanvasSize(currentImage);
+
+          console.log("[DEBUG] Calling createTextureFromImage(currentImage)");
+          createTextureFromImage(currentImage);
+
+          // ---- force layout, then center (no timers) ----
+          void canvas.offsetWidth;
+          void canvasWrapper.offsetWidth;
+          zoomScale = 1;
+          panX = (canvasWrapper.clientWidth  - canvas.width ) / 2;
+          panY = (canvasWrapper.clientHeight - canvas.height) / 2;
+          updateCanvasTransform();
+          resetStrokeState();
+          needsRedraw = true;
+          // -----------------------------------------------
+        }
+
+
+
   };
 
   console.log("[DEBUG] Setting image src to FileReader result");
@@ -2613,128 +3271,492 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
 
 
-async function saveArtwork(name, isOverwrite = false, existingId = null) {
-    try {
-        console.log("[saveArtwork] START", { isOverwrite, existingId, currentArtworkId });
 
-        const db = await openDatabase();
 
-        const offscreenCanvas = document.createElement("canvas");
-        offscreenCanvas.width = fixedFBOWidth;
-        offscreenCanvas.height = fixedFBOHeight;
-        const offscreenCtx = offscreenCanvas.getContext("2d");
+async function saveArtwork(name, isOverwrite = false, existingId = null, options = {}) {
+  const { quiet = false } = options;
 
-        if (currentImage) {
-            console.log("[saveArtwork] Drawing currentImage to offscreenCanvas");
-            offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+  try {
+    const db = await openDatabase();
+
+    // 1) FLATTENED preview for gallery
+    const flattenCanvas = composeToCanvas(true);
+    const flattenedBlob = await canvasToBlob(flattenCanvas, "image/png", 0.92);
+
+    // 2) THUMBNAIL
+    const thumbMax = 320;
+    const thumbScale = Math.min(
+      thumbMax / flattenCanvas.width,
+      thumbMax / flattenCanvas.height,
+      1
+    );
+    const thumbCanvas = document.createElement("canvas");
+    thumbCanvas.width = Math.round(flattenCanvas.width * thumbScale);
+    thumbCanvas.height = Math.round(flattenCanvas.height * thumbScale);
+    thumbCanvas.getContext("2d").drawImage(
+      flattenCanvas,
+      0,
+      0,
+      thumbCanvas.width,
+      thumbCanvas.height
+    );
+    const thumbBlob = await canvasToBlob(thumbCanvas, "image/webp", 0.7);
+    const thumbDataURL = await new Promise((res) => {
+      const r = new FileReader();
+      r.onloadend = () => res(r.result);
+      r.readAsDataURL(thumbBlob);
+    });
+
+    // 3) PROJECT SOURCE (each layer to PNG blob + metadata)
+    const w = fixedFBOWidth, h = fixedFBOHeight;
+
+    // optional background snapshot
+    let backgroundBlob = null;
+    if (currentImage) {
+      const bgCanvas = document.createElement("canvas");
+      bgCanvas.width = w; bgCanvas.height = h;
+      const bgCtx = bgCanvas.getContext("2d");
+      bgCtx.drawImage(currentImage, 0, 0, w, h);
+      backgroundBlob = await canvasToBlob(bgCanvas, "image/png", 0.92);
+    }
+
+    // read each layer FBO → PNG blob
+    async function layerBlobFromFBO(fbo) {
+      const pixels = new Uint8Array(w * h * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = w; tempCanvas.height = h;
+      const tempCtx = tempCanvas.getContext("2d");
+      const imageData = new ImageData(new Uint8ClampedArray(pixels), w, h);
+      tempCtx.putImageData(imageData, 0, 0);
+
+      // flip into a new canvas so stored layer PNG is in screen coords
+      const out = document.createElement("canvas");
+      out.width = w; out.height = h;
+      const octx = out.getContext("2d");
+      octx.save();
+      octx.translate(w / 2, h / 2);
+      octx.scale(-1, -1);
+      octx.rotate(Math.PI);
+      octx.drawImage(tempCanvas, -w / 2, -h / 2);
+      octx.restore();
+
+      return canvasToBlob(out, "image/png", 0.92);
+    }
+
+    const layerEntries = [];
+    for (let i = 0; i < layers.length; i++) {
+      const L = layers[i];
+      const blob = await layerBlobFromFBO(L.fbo);
+      layerEntries.push({
+        name: L.name,
+        visible: !!L.visible,
+        opacity: Number(L.opacity) || 1,
+        blob
+      });
+    }
+
+    const existingIdInput = document.getElementById("existingArtworkId");
+    const existingIdValue = existingIdInput ? existingIdInput.value : null;
+
+    const computedId = isOverwrite
+      ? (existingId ?? currentArtworkId ?? existingIdValue ?? Date.now())
+      : Date.now();
+
+    const artwork = {
+      id: computedId,
+      name: name || `Untitled ${computedId}`,
+      date: new Date().toISOString(),
+      username: "User",
+      appName: "Web Paint",
+      image: flattenedBlob,
+      thumbnail: thumbDataURL,
+      project: {
+        width: w,
+        height: h,
+        backgroundBlob,
+        layers: layerEntries
+      }
+    };
+
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    const store = tx.objectStore(STORE_NAME);
+    store.put(artwork);
+
+    tx.oncomplete = () => {
+      if (!quiet) {
+        showStatusMessage(isOverwrite ? "Artwork overwritten!" : "Artwork saved!", "success");
+      }
+      if (existingIdInput) existingIdInput.value = computedId;
+      currentArtworkId = computedId;
+
+      // optional: send thumbnail to chat (skip in quiet mode)
+      if (!quiet && socket && socket.readyState === WebSocket.OPEN) {
+        const profileData = JSON.parse(localStorage.getItem("userProfile")) || {};
+        const chatMsg = {
+          type: "image",
+          clientId: clientId,
+          nickname: profileData.nickname?.trim() || "",
+          profileImage: profileData.image || "",
+          imageData: artwork.thumbnail,
+          imageName: artwork.name,
+          timestamp: Date.now()
+        };
+        socket.send(JSON.stringify(chatMsg));
+      }
+    };
+
+    tx.onerror = (err) => {
+      console.error("[saveArtwork] IndexedDB ERROR:", err);
+      if (!quiet) showStatusMessage("Error saving artwork.", "error");
+    };
+
+  } catch (error) {
+    console.error("[saveArtwork] CATCH ERROR:", error);
+    if (!quiet) showStatusMessage("Error saving artwork.", "error");
+  }
+}
+
+
+
+
+
+
+
+
+
+const AUTOSAVE_ID = "__autosave__";
+let autosaveTimer = null;
+
+async function saveAutosaveNow() {
+  const db = await openDatabase();
+
+  // Reuse your project packing logic from saveArtwork()
+  const nameInput = document.getElementById("artworkName");
+  const userGivenName = nameInput ? nameInput.value : "";
+
+  // Save under a fixed id so we can overwrite every time
+  // await saveArtwork(userGivenName || "Autosave", true, AUTOSAVE_ID);
+  await saveArtwork(userGivenName || "Autosave", true, AUTOSAVE_ID, { quiet: true });
+
+}
+
+function saveAutosaveDebounced(delay = 800) {
+  if (autosaveTimer) clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(() => { saveAutosaveNow().catch(console.error); }, delay);
+}
+
+// Load from autosave at startup
+
+async function tryRestoreAutosave() {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME);
+  const req = store.get(AUTOSAVE_ID);
+  req.onsuccess = async () => {
+    const art = req.result;
+    if (!art) return; // nothing to restore
+    await loadArtworkObject(art);
+    showStatusMessage("Autosave restored", "success");
+  };
+  req.onerror = () => {
+    console.warn("Autosave lookup failed.");
+  };
+}
+
+
+
+// Factor your existing loadArtwork() logic into a callable that accepts the raw record:
+// Rebuild the canvas (background + layers + UI) from a DB record object
+async function loadArtworkObject(art) {
+  if (!art) { showStatusMessage("Artwork not found.", "error"); return; }
+
+  currentArtworkId = art.id;
+
+  // Project with layers?
+  if (art.project && art.project.layers && art.project.layers.length) {
+    const w = art.project.width, h = art.project.height;
+
+    fixedFBOWidth = w;
+    fixedFBOHeight = h;
+
+    initFloodFBOs();
+    initPaintLayerFixed(); // creates one default; we’ll replace
+
+    // restore background (if any)
+    if (art.project.backgroundBlob) {
+      const bgUrl = URL.createObjectURL(art.project.backgroundBlob);
+      const img = new Image();
+      await new Promise((resolve) => {
+
+
+        img.onload = () => {
+          currentImage = img;
+          updateCanvasSize(img);
+          createTextureFromImage(img);
+
+          // ---- force layout, then center (no timers) ----
+          void canvas.offsetWidth;
+          void canvasWrapper.offsetWidth;
+          zoomScale = 1;
+          panX = (canvasWrapper.clientWidth  - canvas.width ) / 2;
+          panY = (canvasWrapper.clientHeight - canvas.height) / 2;
+          updateCanvasTransform();
+          resetStrokeState();
+          needsRedraw = true;
+          // -----------------------------------------------
+
+          URL.revokeObjectURL(bgUrl);
+          resolve();
+        };
+
+
+
+        img.src = bgUrl;
+      });
+    } else {
+      currentImage = null;
+      texture = null;
+      updateCanvasSize({ width: w, height: h });
+    }
+
+    // kill old GL layer objects
+    layers.forEach(L => { gl.deleteTexture(L.texture); gl.deleteFramebuffer(L.fbo); });
+    layers = [];
+
+    // helper to draw an Image into a layer FBO at size w x h
+
+
+        function drawImageIntoLayerFBO(image, fbo) {
+          // Assumes w,h are the intended document size in the outer scope.
+          // If you prefer, replace w/h with fixedFBOWidth/fixedFBOHeight.
+          const W = w, H = h;
+
+          // 1) Rasterize the source image into a 2D canvas at the exact target size.
+          const temp = document.createElement("canvas");
+          temp.width = W;
+          temp.height = H;
+          const tctx = temp.getContext("2d", { willReadFrequently: false });
+          tctx.clearRect(0, 0, W, H);
+          tctx.drawImage(image, 0, 0, W, H);
+
+          // 2) Upload as a WebGL texture (LINEAR filtering for smooth sampling later).
+          const tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+          gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, temp);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+          // 3) Draw the texture into the destination FBO (no blending needed).
+          gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+
+          // Safety: ensure the FBO is complete before drawing.
+          const status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+          if (status !== gl.FRAMEBUFFER_COMPLETE) {
+            console.warn("drawImageIntoLayerFBO: target FBO incomplete:", status);
+            gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            gl.bindTexture(gl.TEXTURE_2D, null);
+            gl.deleteTexture(tex);
+            return;
+          }
+
+          gl.viewport(0, 0, W, H);
+          gl.disable(gl.BLEND);
+          gl.clearColor(0, 0, 0, 0);
+          gl.clear(gl.COLOR_BUFFER_BIT);
+
+          gl.useProgram(quadProgram);
+          // We are drawing into the FBO in its native orientation; no flip here.
+          const flipLoc = gl.getUniformLocation(quadProgram, "u_flipY");
+          if (flipLoc !== null) gl.uniform1f(flipLoc, 1.0);
+          const resLoc = gl.getUniformLocation(quadProgram, "u_resolution");
+          if (resLoc !== null) gl.uniform2f(resLoc, W, H);
+          const opLoc = gl.getUniformLocation(quadProgram, "u_layerOpacity");
+          if (opLoc !== null) gl.uniform1f(opLoc, 1.0);
+
+          // Full-rect covering quad in pixel space (matching quadVS expectations).
+          const verts = new Float32Array([
+            0, 0,   0, 0,
+            W, 0,   1, 0,
+            0, H,   0, 1,
+
+            0, H,   0, 1,
+            W, 0,   1, 0,
+            W, H,   1, 1
+          ]);
+
+          const buf = gl.createBuffer();
+          gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+          gl.bufferData(gl.ARRAY_BUFFER, verts, gl.STATIC_DRAW);
+
+          const posLoc = gl.getAttribLocation(quadProgram, "a_position");
+          const texLoc = gl.getAttribLocation(quadProgram, "a_texCoord");
+          gl.enableVertexAttribArray(posLoc);
+          gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 16, 0);
+          gl.enableVertexAttribArray(texLoc);
+          gl.vertexAttribPointer(texLoc, 2, gl.FLOAT, false, 16, 8);
+
+          gl.activeTexture(gl.TEXTURE0);
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          const uTex = gl.getUniformLocation(quadProgram, "u_texture");
+          if (uTex !== null) gl.uniform1i(uTex, 0);
+
+          gl.drawArrays(gl.TRIANGLES, 0, 6);
+
+          // 4) Cleanup & restore minimal state.
+          gl.disableVertexAttribArray(posLoc);
+          gl.disableVertexAttribArray(texLoc);
+          gl.bindBuffer(gl.ARRAY_BUFFER, null);
+          gl.deleteBuffer(buf);
+
+          gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+          gl.bindTexture(gl.TEXTURE_2D, null);
+          gl.deleteTexture(tex);
+
+          if (typeof needsRedraw !== "undefined") needsRedraw = true;
         }
 
-        const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-        gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = fixedFBOWidth;
-        tempCanvas.height = fixedFBOHeight;
-        const tempCtx = tempCanvas.getContext("2d");
+    // rebuild layers in stored order
+    for (const src of art.project.layers) {
+      const { texture, fbo } = createLayerFBO(w, h);
+      const L = {
+        id: Date.now() + Math.random(),
+        name: src.name || `Layer ${layers.length+1}`,
+        fbo, texture,
+        visible: !!src.visible,
+        opacity: Number(src.opacity) || 1,
+        history: [], redo: []
+      };
+      layers.push(L);
 
-        const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-        tempCtx.putImageData(imageData, 0, 0);
-
-        offscreenCtx.save();
-        offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
-        offscreenCtx.scale(-1, -1);
-        offscreenCtx.rotate(Math.PI);
-        offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
-        offscreenCtx.restore();
-
-        offscreenCanvas.toBlob(async (blob) => {
-            if (!blob) {
-                console.error("[saveArtwork] ERROR: Failed to generate artwork blob.");
-                showStatusMessage("Error saving artwork.", "error");
-                return;
-            }
-
-            const existingIdInput = document.getElementById("existingArtworkId");
-            const existingIdValue = existingIdInput ? existingIdInput.value : null;
-
-            const computedId = isOverwrite
-                ? Number(existingId || currentArtworkId || existingIdValue)
-                : Date.now();
-
-            console.log("[saveArtwork] Computed ID:", computedId, "typeof:", typeof computedId);
-
-            const artwork = {
-                id: computedId,
-                name: name || `Untitled ${computedId}`,
-                date: new Date().toISOString(),
-                username: "User",
-                appName: "Web Paint",
-                image: blob,
-                thumbnail: null,
-            };
-
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                artwork.thumbnail = reader.result;
-
-                console.log("[saveArtwork] Saving to IndexedDB:", artwork);
-
-                const tx = db.transaction(STORE_NAME, "readwrite");
-                const store = tx.objectStore(STORE_NAME);
-
-                store.put(artwork);
-
-                tx.oncomplete = () => {
-                    console.log("[saveArtwork] SAVE COMPLETE", { id: computedId });
-                    showStatusMessage("Artwork saved!", "success");
-
-                    if (existingIdInput) {
-                        existingIdInput.value = computedId;
-                        console.log("[saveArtwork] Updated existingArtworkId input:", computedId);
-                    }
-
-                    currentArtworkId = computedId;
-                    console.log("[saveArtwork] Updated currentArtworkId:", currentArtworkId);
-
-                    //––––––––––––––––––––––––––––––
-                    // SEND ARTWORK TO CHAT (HERE)
-                    //––––––––––––––––––––––––––––––
-                    if (socket && socket.readyState === WebSocket.OPEN) {
-                        const profileData = JSON.parse(localStorage.getItem("userProfile")) || {};
-                        const nickname = profileData.nickname?.trim() || "";
-                        const profileImage = profileData.image || "";
-
-                        const chatMsg = {
-                            type: "image",
-                            clientId: clientId,
-                            nickname: nickname,
-                            profileImage: profileImage,
-                            imageData: artwork.thumbnail, // send image as base64 string
-                            imageName: artwork.name,
-                            timestamp: Date.now()
-                        };
-
-                        socket.send(JSON.stringify(chatMsg));
-                        console.log("[saveArtwork] Artwork sent to chat.");
-                    }
-                };
-
-                tx.onerror = (err) => {
-                    console.error("[saveArtwork] IndexedDB ERROR:", err);
-                    showStatusMessage("Error saving artwork.", "error");
-                };
-            };
-
-            reader.readAsDataURL(blob);
-        }, "image/webp");
-
-    } catch (error) {
-        console.error("[saveArtwork] CATCH ERROR:", error);
-        showStatusMessage("Error saving artwork.", "error");
+      // decode PNG and draw into FBO
+      const url = URL.createObjectURL(src.blob);
+      const img = new Image();
+      await new Promise((resolve) => {
+        img.onload = () => { drawImageIntoLayerFBO(img, fbo); URL.revokeObjectURL(url); resolve(); };
+        img.src = url;
+      });
     }
+
+    activeLayerIndex = Math.max(0, layers.length - 1);
+    syncActiveAliases();
+    if (typeof rebuildLayersUI === "function") rebuildLayersUI();
+
+    needsRedraw = true;
+
+    // close gallery modal if it exists
+    const gModal = document.getElementById("galleryModal");
+    if (gModal) closeModal(gModal);
+
+    showStatusMessage("Artwork loaded!", "success");
+    return;
+  }
+
+  // Fallback: flat image only
+  await new Promise((resolve) => {
+    const img = new Image();
+
+
+    img.onload = () => {
+      clearCanvas();
+      currentImage = img;
+      fixedFBOWidth = img.width;
+      fixedFBOHeight = img.height;
+
+      updateCanvasSize(img);
+      createTextureFromImage(img);
+
+      // ---- force layout, then center (no timers) ----
+      void canvas.offsetWidth;
+      void canvasWrapper.offsetWidth;
+      zoomScale = 1;
+      panX = (canvasWrapper.clientWidth  - canvas.width ) / 2;
+      panY = (canvasWrapper.clientHeight - canvas.height) / 2;
+      updateCanvasTransform();
+      resetStrokeState();
+      needsRedraw = true;
+      // -----------------------------------------------
+
+      const nameEl = document.getElementById("artworkName");
+      const idEl   = document.getElementById("existingArtworkId");
+      if (art.name && nameEl) nameEl.value = art.name;
+      if (idEl) idEl.value = art.id;
+
+      const gModal = document.getElementById("galleryModal");
+      if (gModal) closeModal(gModal);
+
+      showStatusMessage("Artwork loaded!", "success");
+      resolve();
+    };
+
+
+    img.src = URL.createObjectURL(art.image);
+  });
 }
+
+
+async function loadArtwork(id) {
+  const db = await openDatabase();
+  const store = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME);
+  const req = store.get(id);
+
+  req.onsuccess = async () => {
+    const art = req.result;
+    if (!art) { showStatusMessage("Artwork not found.", "error"); return; }
+    await loadArtworkObject(art);
+  };
+
+  req.onerror = () => {
+    console.error("Failed to load artwork from IndexedDB.");
+    showStatusMessage("Failed to load artwork.", "error");
+  };
+}
+
+
+// ... inside the same DOMContentLoaded callback, AFTER
+// openDatabase, saveAutosaveNow, saveAutosaveDebounced, tryRestoreAutosave, etc.
+
+(function wireAutosave() {
+  const saveSoon = () => saveAutosaveDebounced(500);
+  const saveNow  = () => { try { saveAutosaveNow(); } catch (_) {} };
+
+  const canvasEl = document.getElementById("glCanvas");
+  if (canvasEl) {
+    ["pointerup","mouseup","touchend"].forEach(ev =>
+      canvasEl.addEventListener(ev, saveSoon, { passive: true })
+    );
+  }
+  document.addEventListener("keyup", saveSoon, { passive: true });
+
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) saveNow();
+  });
+  window.addEventListener("beforeunload", saveNow);
+
+  // light periodic safety save (skip while drawing if you like)
+  setInterval(() => {
+    try { if (!isDrawing) saveSoon(); } catch (_) { /* ignore */ }
+  }, 15000);
+
+  // restore once everything visual is initialized
+  window.addEventListener("load", () => {
+    requestAnimationFrame(() => {
+      tryRestoreAutosave(); // <-- this now calls the *real* function in-scope
+    });
+  });
+})();
+
+
+
+
+
 
 
     document.addEventListener("keydown", (event) => {
@@ -2784,7 +3806,7 @@ async function saveArtwork(name, isOverwrite = false, existingId = null) {
 
         if (existingId && nameInput) {
             // Proceed to overwrite artwork
-            saveArtwork(nameInput, true, existingId); // Pass `true` for overwrite and the existing ID
+            saveArtwork(nameInput, true, existingId, { quiet: true });
         } else {
             console.error("No existing artwork ID or name found. Cannot overwrite.");
         }
@@ -2793,44 +3815,57 @@ async function saveArtwork(name, isOverwrite = false, existingId = null) {
     });
 
 
-    function saveCanvasAsPNG() {
-        const offscreenCanvas = document.createElement("canvas");
-        offscreenCanvas.width = fixedFBOWidth;
-        offscreenCanvas.height = fixedFBOHeight;
-        const offscreenCtx = offscreenCanvas.getContext("2d");
 
-        if (currentImage) {
-            offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
-        }
-
-        const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-        gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = fixedFBOWidth;
-        tempCanvas.height = fixedFBOHeight;
-        const tempCtx = tempCanvas.getContext("2d");
-
-        const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-        tempCtx.putImageData(imageData, 0, 0);
-
-        offscreenCtx.save();
-        offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
-        offscreenCtx.scale(-1, -1);
-        offscreenCtx.rotate(Math.PI);
-        offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
-        offscreenCtx.restore();
-
-        const dataURL = offscreenCanvas.toDataURL("image/png");
-        const link = document.createElement("a");
-        link.href = dataURL;
-        link.download = `canvas_${Date.now()}.png`;
-        document.body.appendChild(link);
-        link.click();
-        document.body.removeChild(link);
+    function saveCanvasAsPNG(includeBackground = true) {
+      const out = composeToCanvas(includeBackground);
+      const link = document.createElement("a");
+      const suffix = includeBackground ? "_with_background" : "_transparent";
+      link.download = `canvas_${Date.now()}${suffix}.png`;
+      link.href = out.toDataURL("image/png");
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
     }
+
+
+    // function saveCanvasAsPNG() {
+    //     const offscreenCanvas = document.createElement("canvas");
+    //     offscreenCanvas.width = fixedFBOWidth;
+    //     offscreenCanvas.height = fixedFBOHeight;
+    //     const offscreenCtx = offscreenCanvas.getContext("2d");
+
+    //     if (currentImage) {
+    //         offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+    //     }
+
+    //     const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
+    //     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+    //     gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    //     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+    //     const tempCanvas = document.createElement("canvas");
+    //     tempCanvas.width = fixedFBOWidth;
+    //     tempCanvas.height = fixedFBOHeight;
+    //     const tempCtx = tempCanvas.getContext("2d");
+
+    //     const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
+    //     tempCtx.putImageData(imageData, 0, 0);
+
+    //     offscreenCtx.save();
+    //     offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
+    //     offscreenCtx.scale(-1, -1);
+    //     offscreenCtx.rotate(Math.PI);
+    //     offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
+    //     offscreenCtx.restore();
+
+    //     const dataURL = offscreenCanvas.toDataURL("image/png");
+    //     const link = document.createElement("a");
+    //     link.href = dataURL;
+    //     link.download = `canvas_${Date.now()}.png`;
+    //     document.body.appendChild(link);
+    //     link.click();
+    //     document.body.removeChild(link);
+    // }
 
 
 
@@ -2838,60 +3873,90 @@ async function saveArtwork(name, isOverwrite = false, existingId = null) {
 
 
 function saveCanvasAsICO() {
-    const targetSize = 64; // Change to 32, 48, etc., for other favicon sizes
+  const targetSize = 64;
+  const composed = composeToCanvas(true); // ICO always with background; change if you want
 
-    // Create an offscreen canvas for composing the final image
-    const offscreenCanvas = document.createElement("canvas");
-    offscreenCanvas.width = targetSize;
-    offscreenCanvas.height = targetSize;
-    const offscreenCtx = offscreenCanvas.getContext("2d");
+  const icoCanvas = document.createElement("canvas");
+  icoCanvas.width = targetSize;
+  icoCanvas.height = targetSize;
+  const ictx = icoCanvas.getContext("2d");
+  ictx.drawImage(composed, 0, 0, targetSize, targetSize);
 
-    // Step 1: Draw the background image (if available)
-    if (currentImage) {
-        offscreenCtx.drawImage(currentImage, 0, 0, targetSize, targetSize);
-    }
-
-    // Step 2: Extract paint layer from WebGL
-    const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-    // Step 3: Create a temporary canvas for strokes
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = fixedFBOWidth;
-    tempCanvas.height = fixedFBOHeight;
-    const tempCtx = tempCanvas.getContext("2d");
-
-    const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-    tempCtx.putImageData(imageData, 0, 0);
-
-    // Step 4: Scale down the composed artwork to ICO size
-    offscreenCtx.save();
-    offscreenCtx.translate(targetSize / 2, targetSize / 2);
-    offscreenCtx.scale(-1, -1); // Flip for correct orientation
-    offscreenCtx.rotate(Math.PI);
-    offscreenCtx.drawImage(tempCanvas, -targetSize / 2, -targetSize / 2, targetSize, targetSize);
-    offscreenCtx.restore();
-
-    // Step 5: Convert to ICO format
-    offscreenCanvas.toBlob((blob) => {
-        const reader = new FileReader();
-        reader.readAsArrayBuffer(blob);
-        reader.onloadend = () => {
-            const pngArrayBuffer = reader.result;
-            const icoArrayBuffer = convertPNGToICO(pngArrayBuffer, targetSize);
-
-            const icoBlob = new Blob([icoArrayBuffer], { type: "image/x-icon" });
-            const link = document.createElement("a");
-            link.href = URL.createObjectURL(icoBlob);
-            link.download = `favicon.ico`;
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        };
-    }, "image/png");
+  icoCanvas.toBlob((pngBlob) => {
+    if (!pngBlob) { showStatusMessage("ICO export failed.", "error"); return; }
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const pngArrayBuffer = reader.result;
+      const icoArrayBuffer = convertPNGToICO(pngArrayBuffer, targetSize);
+      const icoBlob = new Blob([icoArrayBuffer], { type: "image/x-icon" });
+      const link = document.createElement("a");
+      link.href = URL.createObjectURL(icoBlob);
+      link.download = "favicon.ico";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    };
+    reader.readAsArrayBuffer(pngBlob);
+  }, "image/png");
 }
+
+
+
+// function saveCanvasAsICO() {
+//     const targetSize = 64; // Change to 32, 48, etc., for other favicon sizes
+
+//     // Create an offscreen canvas for composing the final image
+//     const offscreenCanvas = document.createElement("canvas");
+//     offscreenCanvas.width = targetSize;
+//     offscreenCanvas.height = targetSize;
+//     const offscreenCtx = offscreenCanvas.getContext("2d");
+
+//     // Step 1: Draw the background image (if available)
+//     if (currentImage) {
+//         offscreenCtx.drawImage(currentImage, 0, 0, targetSize, targetSize);
+//     }
+
+//     // Step 2: Extract paint layer from WebGL
+//     const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+//     gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+//     // Step 3: Create a temporary canvas for strokes
+//     const tempCanvas = document.createElement("canvas");
+//     tempCanvas.width = fixedFBOWidth;
+//     tempCanvas.height = fixedFBOHeight;
+//     const tempCtx = tempCanvas.getContext("2d");
+
+//     const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
+//     tempCtx.putImageData(imageData, 0, 0);
+
+//     // Step 4: Scale down the composed artwork to ICO size
+//     offscreenCtx.save();
+//     offscreenCtx.translate(targetSize / 2, targetSize / 2);
+//     offscreenCtx.scale(-1, -1); // Flip for correct orientation
+//     offscreenCtx.rotate(Math.PI);
+//     offscreenCtx.drawImage(tempCanvas, -targetSize / 2, -targetSize / 2, targetSize, targetSize);
+//     offscreenCtx.restore();
+
+//     // Step 5: Convert to ICO format
+//     offscreenCanvas.toBlob((blob) => {
+//         const reader = new FileReader();
+//         reader.readAsArrayBuffer(blob);
+//         reader.onloadend = () => {
+//             const pngArrayBuffer = reader.result;
+//             const icoArrayBuffer = convertPNGToICO(pngArrayBuffer, targetSize);
+
+//             const icoBlob = new Blob([icoArrayBuffer], { type: "image/x-icon" });
+//             const link = document.createElement("a");
+//             link.href = URL.createObjectURL(icoBlob);
+//             link.download = `favicon.ico`;
+//             document.body.appendChild(link);
+//             link.click();
+//             document.body.removeChild(link);
+//         };
+//     }, "image/png");
+// }
 
 // Convert PNG to ICO (Fixed)
 function convertPNGToICO(pngBuffer, size) {
@@ -3003,49 +4068,64 @@ function exportTransparent() {
     exportDrawingWithModal(false);
 }
 
+
 function exportDrawingWithModal(includeBackground) {
-    const offscreenCanvas = document.createElement("canvas");
-    offscreenCanvas.width = fixedFBOWidth;
-    offscreenCanvas.height = fixedFBOHeight;
-    const offscreenCtx = offscreenCanvas.getContext("2d");
+  const w = fixedFBOWidth;
+  const h = fixedFBOHeight;
 
-    // Step 1: optionally draw background
-    if (includeBackground && currentImage) {
-        offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
-    }
+  const offscreenCanvas = document.createElement("canvas");
+  offscreenCanvas.width = w;
+  offscreenCanvas.height = h;
+  const offscreenCtx = offscreenCanvas.getContext("2d");
 
-    // Step 2: read paint FBO pixels
-    const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+  // 0) start transparent
+  offscreenCtx.clearRect(0, 0, w, h);
+
+  // 1) optional background
+  if (includeBackground && currentImage) {
+    offscreenCtx.drawImage(currentImage, 0, 0, w, h);
+  }
+
+  // helper to read an FBO into ImageData
+  function readFBOToImageData(fbo) {
+    const pixels = new Uint8Array(w * h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return new ImageData(new Uint8ClampedArray(pixels), w, h);
+  }
 
-    // Step 3: create temp canvas for paint
+  // 2) composite all layers bottom→top with opacity
+  for (let i = 0; i < layers.length; i++) {
+    const L = layers[i];
+    if (!L.visible || L.opacity <= 0) continue;
+
     const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = fixedFBOWidth;
-    tempCanvas.height = fixedFBOHeight;
+    tempCanvas.width = w;
+    tempCanvas.height = h;
     const tempCtx = tempCanvas.getContext("2d");
+    tempCtx.putImageData(readFBOToImageData(L.fbo), 0, 0);
 
-    const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-    tempCtx.putImageData(imageData, 0, 0);
-
-    // Step 4: flip & draw paint onto offscreen canvas
+    // Flip to correct WebGL Y orientation
     offscreenCtx.save();
-    offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
+    offscreenCtx.globalAlpha = L.opacity;
+    offscreenCtx.translate(w / 2, h / 2);
     offscreenCtx.scale(-1, -1);
     offscreenCtx.rotate(Math.PI);
-    offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
+    offscreenCtx.drawImage(tempCanvas, -w / 2, -h / 2);
     offscreenCtx.restore();
+  }
 
-    // Step 5: export PNG with timestamp-based filename
-    const link = document.createElement("a");
-    const suffix = includeBackground ? "_with_background" : "_transparent";
-    link.download = `canvas_${Date.now()}${suffix}.png`;
-    link.href = offscreenCanvas.toDataURL("image/png");
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+  // 3) export PNG
+  const link = document.createElement("a");
+  const suffix = includeBackground ? "_with_background" : "_transparent";
+  link.download = `canvas_${Date.now()}${suffix}.png`;
+  link.href = offscreenCanvas.toDataURL("image/png");
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
 }
+
 
 document.getElementById("exportModalClose").addEventListener("click", closeExportModal);
 document.getElementById("exportWithBackgroundBtn").addEventListener("click", exportWithBackground);
@@ -3055,7 +4135,6 @@ document.getElementById("saveCanvasButton").addEventListener("click", openExport
 
 // old
 //document.getElementById("saveCanvasButton").addEventListener("click", saveCanvasAsPNG);
-
 
 
 //---------------
@@ -3082,60 +4161,79 @@ function shareTransparent() {
     shareDrawingWithModal(false);
 }
 
+
 function shareDrawingWithModal(includeBackground) {
-    const offscreenCanvas = document.createElement("canvas");
-    offscreenCanvas.width = fixedFBOWidth;
-    offscreenCanvas.height = fixedFBOHeight;
-    const offscreenCtx = offscreenCanvas.getContext("2d");
+  const out = composeToCanvas(includeBackground);
+  out.toBlob(async (blob) => {
+    if (!blob) { showStatusMessage("Error generating artwork.", "error"); return; }
+    const suffix = includeBackground ? "_with_background" : "_transparent";
+    const file = new File([blob], `artwork${suffix}.png`, { type: "image/png" });
 
-    if (includeBackground && currentImage) {
-        offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share({ title: "Artwork", text: "Check out my artwork!", files: [file] });
+      } catch { showStatusMessage("Error sharing artwork.", "error"); }
+    } else {
+      showStatusMessage("Sharing not supported on this device.", "error");
     }
-
-    const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-    gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-
-    const tempCanvas = document.createElement("canvas");
-    tempCanvas.width = fixedFBOWidth;
-    tempCanvas.height = fixedFBOHeight;
-    const tempCtx = tempCanvas.getContext("2d");
-
-    const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-    tempCtx.putImageData(imageData, 0, 0);
-
-    offscreenCtx.save();
-    offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
-    offscreenCtx.scale(-1, -1);
-    offscreenCtx.rotate(Math.PI);
-    offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
-    offscreenCtx.restore();
-
-    offscreenCanvas.toBlob(async (blob) => {
-        if (!blob) {
-            showStatusMessage("Error generating artwork for sharing.", "error");
-            return;
-        }
-
-        const suffix = includeBackground ? "_with_background" : "_transparent";
-        const file = new File([blob], `artwork${suffix}.png`, { type: "image/png" });
-
-        if (navigator.canShare && navigator.canShare({ files: [file] })) {
-            try {
-                await navigator.share({
-                    title: "Artwork",
-                    text: "Check out my artwork!",
-                    files: [file],
-                });
-            } catch {
-                showStatusMessage("Error sharing artwork.", "error");
-            }
-        } else {
-            showStatusMessage("Sharing not supported on this device.", "error");
-        }
-    }, "image/png");
+  }, "image/png");
 }
+
+
+// function shareDrawingWithModal(includeBackground) {
+//     const offscreenCanvas = document.createElement("canvas");
+//     offscreenCanvas.width = fixedFBOWidth;
+//     offscreenCanvas.height = fixedFBOHeight;
+//     const offscreenCtx = offscreenCanvas.getContext("2d");
+
+//     if (includeBackground && currentImage) {
+//         offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+//     }
+
+//     const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+//     gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+//     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+
+//     const tempCanvas = document.createElement("canvas");
+//     tempCanvas.width = fixedFBOWidth;
+//     tempCanvas.height = fixedFBOHeight;
+//     const tempCtx = tempCanvas.getContext("2d");
+
+//     const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
+//     tempCtx.putImageData(imageData, 0, 0);
+
+//     offscreenCtx.save();
+//     offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
+//     offscreenCtx.scale(-1, -1);
+//     offscreenCtx.rotate(Math.PI);
+//     offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
+//     offscreenCtx.restore();
+
+//     offscreenCanvas.toBlob(async (blob) => {
+//         if (!blob) {
+//             showStatusMessage("Error generating artwork for sharing.", "error");
+//             return;
+//         }
+
+//         const suffix = includeBackground ? "_with_background" : "_transparent";
+//         const file = new File([blob], `artwork${suffix}.png`, { type: "image/png" });
+
+//         if (navigator.canShare && navigator.canShare({ files: [file] })) {
+//             try {
+//                 await navigator.share({
+//                     title: "Artwork",
+//                     text: "Check out my artwork!",
+//                     files: [file],
+//                 });
+//             } catch {
+//                 showStatusMessage("Error sharing artwork.", "error");
+//             }
+//         } else {
+//             showStatusMessage("Sharing not supported on this device.", "error");
+//         }
+//     }, "image/png");
+// }
 
 document.getElementById("shareModalClose").addEventListener("click", closeShareModal);
 document.getElementById("shareWithBackgroundBtn").addEventListener("click", shareWithBackground);
@@ -3150,6 +4248,73 @@ document.getElementById("shareTransparentBtn").addEventListener("click", shareTr
 
 let galleryEditMode = false;
 let artworkToDeleteId = null;
+
+
+
+// Compose everything into a 2D canvas (background + visible layers)
+function composeToCanvas(includeBackground = true) {
+  const w = fixedFBOWidth, h = fixedFBOHeight;
+  const out = document.createElement("canvas");
+  out.width = w; out.height = h;
+  const ctx = out.getContext("2d");
+
+  // start transparent
+  ctx.clearRect(0, 0, w, h);
+
+  // optional background
+  if (includeBackground && currentImage) {
+    ctx.drawImage(currentImage, 0, 0, w, h);
+  }
+
+  // helper to read an FBO into ImageData
+  function readFBOToImageData(fbo) {
+    const pixels = new Uint8Array(w * h * 4);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    return new ImageData(new Uint8ClampedArray(pixels), w, h);
+  }
+
+  // composite all layers bottom → top with opacity,
+  // flipping to fix WebGL's Y orientation
+  for (let i = 0; i < layers.length; i++) {
+    const L = layers[i];
+    if (!L || !L.visible || L.opacity <= 0) continue;
+
+    const temp = document.createElement("canvas");
+    temp.width = w; temp.height = h;
+    const tctx = temp.getContext("2d");
+    tctx.putImageData(readFBOToImageData(L.fbo), 0, 0);
+
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, Math.min(1, L.opacity));
+    ctx.translate(w / 2, h / 2);
+    ctx.scale(-1, -1);
+    ctx.rotate(Math.PI);
+    ctx.drawImage(temp, -w / 2, -h / 2);
+    ctx.restore();
+  }
+
+  return out;
+}
+
+// PNG blob (flattened) from full composition
+function composeToPNGBlob(includeBackground = true, quality = 0.92) {
+  return new Promise((resolve) => {
+    const c = composeToCanvas(includeBackground);
+    c.toBlob(b => resolve(b), "image/png", quality);
+  });
+}
+
+// WEBP/JPEG blob (useful for thumbnails)
+function canvasToBlob(canvas, type = "image/webp", quality = 0.75) {
+  return new Promise((resolve) => {
+    canvas.toBlob(b => resolve(b), type, quality);
+  });
+}
+
+
+
 
 async function loadGallery() {
     const db = await openDatabase();
@@ -3633,7 +4798,7 @@ socket.onmessage = (event) => {
                 ${avatar} 
                 <div class="chat-text">
                     <div>[${sender}]: posted artwork</div>
-                    <img src="${msgObj.imageData}" alt="${msgObj.imageName}" style="max-width: 220px; max-height: 220px; margin-top: 5px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
+                    <img src="${msgObj.imageData}" alt="${msgObj.imageName}" style="max-width: 220px; max-height: 320px; margin-top: 5px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.2);">
                 </div>
             `;
 
@@ -3843,100 +5008,127 @@ function colorFromClientId(clientId) {
 }
 
 
-function sendCurrentArtworkToChat(name = "Untitled") {
-    try {
-        const offscreenCanvas = document.createElement("canvas");
-        offscreenCanvas.width = fixedFBOWidth;
-        offscreenCanvas.height = fixedFBOHeight;
-        const offscreenCtx = offscreenCanvas.getContext("2d");
+function sendCurrentArtworkToChat(name = "Untitled", opts = {}) {
+  // === TWEAK HERE WHEN CALLING ===
+  const {
+    size = 1024,            // longest side in pixels; use 1 to keep original size
+    quality = 0.75,          // 0..1 (used for WebP/JPEG); ignored for PNG
+    format = "image/webp",  // "image/webp" | "image/jpeg" | "image/png"
+    includeBackground = true,
+    glFlipY = true          // set false if your composeToCanvas already matches screen
+  } = opts;
 
-        if (currentImage) {
-            console.log("[sendCurrentArtworkToChat] Drawing currentImage to offscreenCanvas");
-            offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
-        }
+  try {
+    console.log("[sendCurrentArtworkToChat] start");
 
-        const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
-        gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
-        gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // 1) Flatten to a single 2D canvas
+    let flattened = null;
 
-        const rawDataSize = pixels.length;
-        console.log(`[sendCurrentArtworkToChat] Raw data size: ${rawDataSize} bytes (${Math.round(rawDataSize / 1024)} KB)`);
+    if (typeof composeToCanvas === "function") {
+      flattened = composeToCanvas(includeBackground);
+      console.log("[sendCurrentArtworkToChat] Using composeToCanvas() flatten");
+    } else {
+      console.log("[sendCurrentArtworkToChat] composeToCanvas() missing; using fallback");
+      const offscreenCanvas = document.createElement("canvas");
+      offscreenCanvas.width = fixedFBOWidth;
+      offscreenCanvas.height = fixedFBOHeight;
+      const offscreenCtx = offscreenCanvas.getContext("2d");
 
-        const tempCanvas = document.createElement("canvas");
-        tempCanvas.width = fixedFBOWidth;
-        tempCanvas.height = fixedFBOHeight;
-        const tempCtx = tempCanvas.getContext("2d");
+      // draw BG/currentImage if you have one
+      if (currentImage) {
+        offscreenCtx.drawImage(currentImage, 0, 0, fixedFBOWidth, fixedFBOHeight);
+      }
 
-        const imageData = new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight);
-        tempCtx.putImageData(imageData, 0, 0);
+      // bring GL layer
+      const pixels = new Uint8Array(fixedFBOWidth * fixedFBOHeight * 4);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, paintFBO);
+      gl.readPixels(0, 0, fixedFBOWidth, fixedFBOHeight, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = fixedFBOWidth;
+      tempCanvas.height = fixedFBOHeight;
+      const tempCtx = tempCanvas.getContext("2d");
+      tempCtx.putImageData(new ImageData(new Uint8ClampedArray(pixels), fixedFBOWidth, fixedFBOHeight), 0, 0);
+
+      // fix orientation (WebGL readPixels is bottom-left origin)
+      if (glFlipY) {
         offscreenCtx.save();
         offscreenCtx.translate(fixedFBOWidth / 2, fixedFBOHeight / 2);
         offscreenCtx.scale(-1, -1);
         offscreenCtx.rotate(Math.PI);
         offscreenCtx.drawImage(tempCanvas, -fixedFBOWidth / 2, -fixedFBOHeight / 2);
         offscreenCtx.restore();
+      } else {
+        offscreenCtx.drawImage(tempCanvas, 0, 0);
+      }
 
-        // Scale down for sending (decimate pixels)
-        const scaleFactor = 0.33; // 33% smaller
-        const previewWidth = Math.round(fixedFBOWidth * scaleFactor);
-        const previewHeight = Math.round(fixedFBOHeight * scaleFactor);
-
-        const previewCanvas = document.createElement("canvas");
-        previewCanvas.width = previewWidth;
-        previewCanvas.height = previewHeight;
-        const previewCtx = previewCanvas.getContext("2d");
-
-        previewCtx.drawImage(offscreenCanvas, 0, 0, previewWidth, previewHeight);
-
-        previewCanvas.toBlob((blob) => {
-            if (!blob) {
-                console.error("[sendCurrentArtworkToChat] ERROR: Failed to generate preview blob.");
-                showStatusMessage("Error sending artwork to chat.", "error");
-                return;
-            }
-
-            const blobSize = blob.size;
-            const compressionRatio = (100 * blobSize) / rawDataSize;
-
-            console.log(`[sendCurrentArtworkToChat] Compressed blob size: ${blobSize} bytes (${Math.round(blobSize / 1024)} KB)`);
-            console.log(`[sendCurrentArtworkToChat] Compression ratio: ${compressionRatio.toFixed(2)}% of original raw data`);
-
-            const reader = new FileReader();
-            reader.onloadend = () => {
-                const imageDataURL = reader.result;
-
-                if (socket && socket.readyState === WebSocket.OPEN) {
-                    const profileData = JSON.parse(localStorage.getItem("userProfile")) || {};
-                    const nickname = profileData.nickname?.trim() || "";
-                    const profileImage = profileData.image || "";
-
-                    const chatMsg = {
-                        type: "image",
-                        clientId: clientId,
-                        nickname: nickname,
-                        profileImage: profileImage,
-                        imageData: imageDataURL,
-                        imageName: name,
-                        timestamp: Date.now()
-                    };
-
-                    socket.send(JSON.stringify(chatMsg));
-                    console.log("[sendCurrentArtworkToChat] Artwork sent to chat.");
-                    showStatusMessage("Send to Chat", "info");
-
-                }
-            };
-
-            reader.readAsDataURL(blob);
-        }, "image/webp", 0.35); // compression quality
-
-    } catch (error) {
-        console.error("[sendCurrentArtworkToChat] CATCH ERROR:", error);
-        showStatusMessage("Error sending artwork to chat.", "error");
+      flattened = offscreenCanvas;
     }
+
+    // 2) Target size
+    const targetMax = (size === 1) ? Math.max(flattened.width, flattened.height) : Math.max(1, Math.round(size));
+    const scale = Math.min(1, targetMax / Math.max(flattened.width, flattened.height));
+    const outW = Math.max(1, Math.round(flattened.width  * scale));
+    const outH = Math.max(1, Math.round(flattened.height * scale));
+
+    const previewCanvas = document.createElement("canvas");
+    previewCanvas.width = outW;
+    previewCanvas.height = outH;
+    const previewCtx = previewCanvas.getContext("2d");
+    previewCtx.drawImage(flattened, 0, 0, outW, outH);
+
+    const rawDataSize = flattened.width * flattened.height * 4;
+    console.log(`[sendCurrentArtworkToChat] Raw RGBA ~${Math.round(rawDataSize / 1024)} KB`);
+
+    // 3) Encode & send
+    const mime = format;
+    const q = quality;
+
+    previewCanvas.toBlob((blob) => {
+      if (!blob) {
+        console.error("[sendCurrentArtworkToChat] ERROR: Failed to generate blob.");
+        showStatusMessage("Error sending artwork to chat.", "error");
+        return;
+      }
+
+      console.log(`[sendCurrentArtworkToChat] Blob ${mime}, ${Math.round(blob.size/1024)} KB`);
+
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const imageDataURL = reader.result;
+        if (socket && socket.readyState === WebSocket.OPEN) {
+          const profileData = JSON.parse(localStorage.getItem("userProfile")) || {};
+          const nickname = profileData.nickname?.trim() || "";
+          const profileImage = profileData.image || "";
+
+          const chatMsg = {
+            type: "image",
+            clientId,
+            nickname,
+            profileImage,
+            imageData: imageDataURL,
+            imageName: name,
+            timestamp: Date.now()
+          };
+
+          socket.send(JSON.stringify(chatMsg));
+          console.log("[sendCurrentArtworkToChat] Artwork sent to chat.");
+          showStatusMessage("Send to Chat", "info");
+        }
+      };
+
+      reader.readAsDataURL(blob);
+    }, mime, q);
+
+  } catch (error) {
+    console.error("[sendCurrentArtworkToChat] CATCH ERROR:", error);
+    showStatusMessage("Error sending artwork to chat.", "error");
+  }
 }
+
+
+
 
 document.getElementById("sendToChatButton").addEventListener("click", () => {
     sendCurrentArtworkToChat("Quick Share");
@@ -4217,72 +5409,7 @@ function shareCurrentArtwork() {
     }
 
 
-    async function loadArtwork(id) {
-        console.log("Loading artwork with ID:", id);
 
-        showStatusMessage("Loading artwork...", "info");
-
-        const db = await openDatabase();
-        const store = db.transaction(STORE_NAME, "readonly").objectStore(STORE_NAME);
-        const request = store.get(id);
-
-
-        request.onsuccess = () => {
-            if (request.result) {
-                console.log("Artwork found:", request.result);
-
-                const artwork = request.result;
-
-                // Set currentArtworkId global so saveArtwork knows what to overwrite
-                currentArtworkId = artwork.id;
-
-                const img = new Image();
-                img.onload = () => {
-                    console.log("Image loaded successfully.");
-
-                    // Step 1: Clear Canvas Before Loading
-                    clearCanvas();
-
-                    // Step 2: Set New Background Image
-                    currentImage = img;
-                    updateCanvasSize(img);
-                    createTextureFromImage(img);
-
-                    drawScene();
-                    console.log("Artwork loaded and displayed on canvas.");
-
-                    // Step 3: Populate the Modal with Artwork Info
-                    const artworkNameInput = document.getElementById("artworkName");
-                    const existingArtworkIdInput = document.getElementById("existingArtworkId");
-
-                    if (artworkNameInput && existingArtworkIdInput) {
-                        artworkNameInput.value = artwork.name;
-                        existingArtworkIdInput.value = artwork.id;
-                    }
-
-                    // Close the gallery modal
-                    closeModal(document.getElementById("galleryModal"));
-                    showStatusMessage("Artwork loaded!", "success");
-                };
-
-                img.onerror = () => {
-                    console.error("Failed to load image.");
-                    showStatusMessage("Error loading image.", "error");
-                };
-
-                img.src = URL.createObjectURL(artwork.image);
-            } else {
-                console.error("Artwork not found in IndexedDB.");
-                showStatusMessage("Artwork not found.", "error");
-            }
-        };
-
-
-        request.onerror = () => {
-            console.error("Failed to load artwork from IndexedDB.");
-            showStatusMessage("Failed to load artwork.", "error");
-        };
-    }
 
 
 
@@ -4323,26 +5450,140 @@ function shareCurrentArtwork() {
         saveArtwork(nameInput ? nameInput.value : "");
         closeModal(saveModal);
     });
+
+
+    function resetView({ fit = true } = {}) {
+      // Compute a scale that ensures the whole canvas is visible in the wrapper.
+      const wrap = canvasWrapper.getBoundingClientRect();
+      const cw = canvas.width;
+      const ch = canvas.height;
+
+      // Fit scale (respect zoomMin/zoomMax). If you prefer strict 1:1, set fit=false.
+      const fitScale = Math.min(wrap.width / cw, wrap.height / ch, zoomMax);
+      const targetScale = fit ? Math.max(zoomMin, fitScale) : 1;
+
+      // Smooth snap
+      const prev = canvas.style.transition;
+      canvas.style.transition = "transform 140ms ease-out";
+
+      zoomScale = targetScale;
+      // Center with your existing helper
+      centerCanvasInWrapper();
+
+      // Clean up
+      setTimeout(() => { canvas.style.transition = prev; }, 160);
+      resetStrokeState();
+      needsRedraw = true;
+    }
+
+    document.getElementById("resetViewBtn").addEventListener("click", () => resetView({ fit: true }));
+
+    // Optional keyboard shortcut: press "0" to reset
+    document.addEventListener("keydown", (e) => {
+      if (isUserTyping()) return;
+      if (e.key === "0") resetView({ fit: true });
+    });
+
+
+
+// the end of DOM
+
 });
 
 
 // Function to clear the strokes but leave the background image intact
-function clearCanvas() {
-    console.log("Clearing canvas...");
 
-    // Call undoStroke repeatedly to clear everything
-    while (strokeHistory.length > 0) {
-        undoStroke();
-    }
+function clearCanvas(keepBackground = true) {
+  // wipe all paint layers
+  layers.forEach(L => {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, L.fbo);
+    gl.viewport(0, 0, fixedFBOWidth, fixedFBOHeight);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  });
+  gl.bindFramebuffer(gl.FRAMEBUFFER, null);
 
-    drawScene(); // Redraw the scene after clearing
+  // reset undo/redo + stroke cursors
+  strokeHistory.length = 0;
+  redoHistory.length = 0;
+  lastX = lastY = lastFx = lastFy = null;
+  strokeCount = 0;
 
-    // Show status message
-    showStatusMessage("Canvas cleared", "info");
+  // keep or drop the background image
+  if (!keepBackground) {
+    currentImage = null;
+    texture = null;
+  }
+
+  // make sure the canvas is visible & redrawn
+  ensureCanvasNotLost?.();
+  needsRedraw = true;
+
+  showStatusMessage("Canvas cleared", "info");
+  resetToCurrentWindow();
 }
 
+function resetToCurrentWindow() {
+  const vw = (window.visualViewport?.width  || window.innerWidth)  | 0;
+  const vh = (window.visualViewport?.height || window.innerHeight) | 0;
+
+  // build a paper texture that exactly matches the viewport
+  const paper = document.createElement("canvas");
+  paper.width = vw;
+  paper.height = vh;
+  const ctx = paper.getContext("2d");
+  ctx.fillStyle = "#f2efe4";
+  ctx.fillRect(0, 0, vw, vh);
+
+  // light noise
+  const noise = ctx.createImageData(vw, vh);
+  for (let i = 0; i < noise.data.length; i += 4) {
+    const n = (Math.random() * 40) | 0;
+    noise.data[i+0] = 230 + n;
+    noise.data[i+1] = 226 + n;
+    noise.data[i+2] = 218 + n;
+    noise.data[i+3] = 255;
+  }
+  ctx.globalAlpha = 0.15;
+  ctx.putImageData(noise, 0, 0);
+  ctx.globalAlpha = 1;
+
+  // commit as current image
+  const img = new Image();
+  img.onload = () => {
+    currentImage = img;
+
+    // FIXED document size == viewport size
+    fixedFBOWidth  = img.width;
+    fixedFBOHeight = img.height;
+
+    // rebuild FBOs/layers for the new doc size
+    initFloodFBOs();
+    initPaintLayerFixed();
+
+    // resize on-screen canvas to fit (keeps aspect properly)
+    updateCanvasSize(img);
+
+    // upload background to GL
+    createTextureFromImage(img);
+
+    // hard reset zoom/pan and center
+    zoomScale = 1;
+    panX = panY = 0;
+    centerCanvasInWrapper?.();
+    resetStrokeState();
+
+    needsRedraw = true;
+    showStatusMessage("New document sized to window", "success");
+  };
+  img.src = paper.toDataURL("image/png");
+}
+
+
 // Event listener for the Clean button
-document.getElementById("cleanButton").addEventListener("click", clearCanvas);
+//document.getElementById("cleanButton").addEventListener("click", clearCanvas);
+document.getElementById("cleanButton").addEventListener("click", () => clearCanvas(true));
+
 
 
 document.getElementById("artworkName").addEventListener("keydown", function (event) {
@@ -4359,9 +5600,11 @@ const uiElements = [
   { id: "redoUndoButtons", display: "flex" },
   { id: "colorsContainer", display: "block" },
   { id: "saveGalleryButtons", display: "block" },
-  { id: "profileSection", display: 'block'},
-  { id: "chatToggleBtn", display: 'flex'}
+  { id: "profileSection", display: "block" },
+  { id: "chatToggleBtn", display: "flex" },
+  { id: "layersPanel", display: "block" } 
 ];
+
 
 const fadeOutUI = () => {
   uiElements.forEach(item => {
@@ -4395,17 +5638,69 @@ const resetUITimeout = () => {
   uiTimeout = setTimeout(fadeInUI, uiTimeoutInterval);
 };
 
-canvas.addEventListener("mousedown", () => {
-  fadeOutUI();
-  if (uiTimeout) clearTimeout(uiTimeout);
+// --- Smarter UI hide: only after real drawing movement ---
+
+let uiHidden = false;
+let hideStart = null;            // {x, y} at pointer down
+const HIDE_MOVE_THRESHOLD = 6;   // pixels in canvas space
+
+function getCanvasPosFromEvent(e) {
+  const rect = canvas.getBoundingClientRect();
+  const p = ("touches" in e ? e.touches[0] : e);
+  return {
+    x: (p.clientX - rect.left) * (canvas.width / rect.width),
+    y: (p.clientY - rect.top)  * (canvas.height / rect.height)
+  };
+}
+
+canvas.addEventListener("mousedown", (e) => {
+  if (currentTool === 'fill') return; // taps for fill shouldn't hide UI
+  hideStart = getCanvasPosFromEvent(e);
+  uiHidden = false;
 });
-canvas.addEventListener("touchstart", () => {
-  fadeOutUI();
-  if (uiTimeout) clearTimeout(uiTimeout);
-});
-canvas.addEventListener("mouseup", resetUITimeout);
-canvas.addEventListener("touchend", resetUITimeout);
-canvas.addEventListener("mouseleave", resetUITimeout);
+
+canvas.addEventListener("touchstart", (e) => {
+  if (isTwoFingerGesture) return;     // ignore pinch/zoom
+  if (currentTool === 'fill') return;
+  hideStart = getCanvasPosFromEvent(e);
+  uiHidden = false;
+}, { passive: false });
+
+// Hide once we detect actual drawing movement
+function maybeHideUIOnMove(e) {
+  if (!isDrawing || uiHidden || !hideStart) return;
+
+  const pos = getCanvasPosFromEvent(("touches" in e ? e.touches[0] : e));
+  const dx = pos.x - hideStart.x;
+  const dy = pos.y - hideStart.y;
+  if (Math.hypot(dx, dy) >= HIDE_MOVE_THRESHOLD) {
+    fadeOutUI();
+    if (uiTimeout) clearTimeout(uiTimeout);
+    uiHidden = true;
+  }
+}
+
+canvas.addEventListener("mousemove", maybeHideUIOnMove, { passive: true });
+canvas.addEventListener("touchmove", (e) => {
+  if (isTwoFingerGesture) return; // still ignore pinch/zoom
+  maybeHideUIOnMove(e);
+}, { passive: false });
+
+
+
+
+function endStrokeUIReset() {
+  // only schedule fade-in if UI was hidden during the stroke
+  if (uiHidden) resetUITimeout();
+  hideStart = null;
+  uiHidden = false;
+}
+
+canvas.addEventListener("mouseup", endStrokeUIReset);
+canvas.addEventListener("touchend", endStrokeUIReset);
+canvas.addEventListener("mouseleave", endStrokeUIReset);
+
+
 window.addEventListener("blur", resetUITimeout);
 window.addEventListener("focus", fadeInUI);
 
@@ -4588,6 +5883,133 @@ function sendCanvasToFlaskForAI() {
 
 
 
+// --- Layers Panel: drag + collapse + persist ---
+(function setupLayersPanel() {
+  const panel  = document.getElementById("layersPanel");
+  if (!panel) return;
+
+  const header = panel.querySelector(".layers-header");
+  const actions= panel.querySelector(".layers-actions");
+  const list   = document.getElementById("layersList");
+
+  // Positioning
+  panel.style.position = panel.style.position || "fixed";
+  panel.style.zIndex = panel.style.zIndex || "30";
+  if (!panel.style.left) panel.style.left = "16px";
+  if (!panel.style.top)  panel.style.top  = "16px";
+
+  // Persist keys
+  const KEY_MIN = "layersPanel:minimized";
+  const KEY_X   = "layersPanel:x";
+  const KEY_Y   = "layersPanel:y";
+
+  // Restore position
+  const px = localStorage.getItem(KEY_X);
+  const py = localStorage.getItem(KEY_Y);
+  if (px !== null && py !== null) {
+    panel.style.left = `${+px}px`;
+    panel.style.top  = `${+py}px`;
+  }
+
+  // Toggle button (injected, no HTML change)
+  let toggleBtn = document.getElementById("layersPanelToggle");
+  if (!toggleBtn) {
+    toggleBtn = document.createElement("button");
+    toggleBtn.id = "layersPanelToggle";
+    toggleBtn.className = "bs";
+    toggleBtn.title = "Show/Hide Layers";
+    toggleBtn.style.minWidth = "28px";
+    toggleBtn.style.display = "inline-flex";
+    toggleBtn.style.alignItems = "center";
+    toggleBtn.style.justifyContent = "center";
+    toggleBtn.innerHTML = `<img class="show-icon" src="/static/draw/images/icons/show.svg" alt="Hide">`;
+    actions?.appendChild(toggleBtn);
+  }
+
+  // Minimized state
+  let minimized = localStorage.getItem(KEY_MIN) === "true";
+  function applyMin() {
+    if (list) list.style.display = minimized ? "none" : "block";
+    toggleBtn.innerHTML = minimized
+      ? `<img class="show-icon" src="/static/draw/images/icons/hide.svg" alt="Show">`
+      : `<img class="show-icon" src="/static/draw/images/icons/show.svg" alt="Hide">`;
+  }
+  applyMin();
+
+  toggleBtn.addEventListener("click", (e) => {
+    e.stopPropagation();
+    minimized = !minimized;
+    localStorage.setItem(KEY_MIN, minimized);
+    applyMin();
+  });
+
+  // Dragging via header (ignore clicks on buttons/inputs inside header)
+  let dragging = false, offX = 0, offY = 0;
+
+  function clampToViewport(x, y) {
+    const rect = panel.getBoundingClientRect();
+    const vw = window.innerWidth;
+    const vh = window.innerHeight;
+    const nx = Math.min(Math.max(8 - rect.width * 0.5, x), vw - 8 - rect.width * 0.5);
+    const ny = Math.min(Math.max(8, y), vh - 8);
+    return { x: nx, y: ny };
+  }
+
+  header.style.cursor = "grab";
+
+  header.addEventListener("pointerdown", (e) => {
+    // let header buttons work normally
+    if (e.target.closest("button,input,select,label")) return;
+    dragging = true;
+    offX = e.clientX - panel.offsetLeft;
+    offY = e.clientY - panel.offsetTop;
+    try { header.setPointerCapture(e.pointerId); } catch {}
+    header.style.cursor = "grabbing";
+  });
+
+  header.addEventListener("pointermove", (e) => {
+    if (!dragging) return;
+    const { x, y } = clampToViewport(e.clientX - offX, e.clientY - offY);
+    panel.style.left = `${x}px`;
+    panel.style.top  = `${y}px`;
+    panel.style.right = "auto";
+    panel.style.bottom = "auto";
+  });
+
+  function stopDrag(e) {
+    if (!dragging) return;
+    dragging = false;
+    try { header.releasePointerCapture(e.pointerId); } catch {}
+    header.style.cursor = "grab";
+    localStorage.setItem(KEY_X, String(panel.offsetLeft));
+    localStorage.setItem(KEY_Y, String(panel.offsetTop));
+  }
+  header.addEventListener("pointerup", stopDrag);
+  header.addEventListener("pointercancel", stopDrag);
+
+  // If restored off-screen (e.g., after resize), nudge back in
+  function nudgeIntoView() {
+    const r = panel.getBoundingClientRect();
+    const vw = window.innerWidth, vh = window.innerHeight;
+    let x = panel.offsetLeft, y = panel.offsetTop, nudged = false;
+    if (r.right < 40) { x = 16; nudged = true; }
+    if (r.bottom < 40) { y = 16; nudged = true; }
+    if (r.left > vw - 40) { x = vw - r.width - 16; nudged = true; }
+    if (r.top  > vh - 40) { y = vh - r.height - 16; nudged = true; }
+    if (nudged) {
+      panel.style.left = `${x}px`;
+      panel.style.top  = `${y}px`;
+      localStorage.setItem(KEY_X, String(x));
+      localStorage.setItem(KEY_Y, String(y));
+    }
+  }
+  window.addEventListener("resize", nudgeIntoView);
+  nudgeIntoView();
+})();
+
+
+
+
 
 
 
@@ -4616,6 +6038,8 @@ function renderLoop() {
 }
 
 renderLoop();
+
+
 
 
 

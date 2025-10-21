@@ -12,54 +12,55 @@ body {
     flex-direction: column;
     align-items: center;
     font-family: Avenir, Helvetica, Arial, sans-serif;
+    -webkit-text-size-adjust: 100%;
 }
 
 canvas {
     border: 0px solid white;
-    max-width: 100vw;
+/*    max-width: 100vw;
     max-height: 100vh;
-}
+*/}
 
-#canvasWrapper {
+/*#canvasWrapper {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
+  top: 0; left: 0;
+  width: 100%; height: 100%;
   overflow: hidden;
   touch-action: none;
   z-index: 0;
+}*/
+
+
+/* prevent text selection (cross-browser) */
+.no-select {
+  user-select: none;
+  -webkit-user-select: none;  /* Safari */
+  -ms-user-select: none;      /* old Edge */
+  -webkit-touch-callout: none;/* iOS long-press menu */
 }
+
+
+
+
+#canvasWrapper {
+  position: relative;
+  width: 100vw;
+  height: 100vh;
+  overflow: hidden;
+}
+
+
 
 #glCanvas {
   position: absolute;
   top: 0;
   left: 0;
-  width: 100%;
-  height: 100%;
+  /* No width/height here — let JS set the bitmap size (canvas.width/height) */
   transform-origin: top left;
+  image-rendering: pixelated;  /* crisp when zooming */
+  will-change: transform;      /* smoother pan/zoom */
 }
 
-
-
-/*#brushSizeSliderContainer {
-    position: fixed;
-    left: 3rem;
-    bottom: 3rem;
-    width: 125px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    gap: 1rem;
-    flex-direction: column;    
-    padding: 10px;
-    border-radius: 5px;
-    z-index: 100;
-    background: rgba(223,223,223,0.5);
-    backdrop-filter: blur(12px);
-    box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
-}
-*/
 
 #brushSizeSliderContainer {
     position: fixed;
@@ -148,6 +149,18 @@ canvas {
 }
 
 
+#brushSizeSliderContainer * {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* allow selecting/editing where needed */
+#brushSizeSliderContainer input,
+#brushSizeSliderContainer textarea,
+#brushSizeSliderContainer [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
 
 
 
@@ -357,9 +370,11 @@ input[type="color" i]:hover {
 
 }
 
+
+
 .bs {
     border: 1px solid rgba(0,0,0,0.022);
-    background: rgba(255,255,255,0.55);
+    background: rgba(255,255,255,0.82);
     padding: 0.5rem;
     font-weight: bold;
     font-size: 11px;
@@ -376,7 +391,7 @@ input[type="color" i]:hover {
 
 .bs:hover {
     color: white;
-    background: rgba(0,0,0,0.25);
+    background: rgba(0,0,0,0.75);
 }
 
 .bs img {
@@ -416,6 +431,61 @@ input[type="color" i]:hover {
 }
 
 
+
+
+
+.bs-n {
+    border: 1px solid rgba(0,0,0,0.022);
+    background: rgba(255,255,255,0.82);
+    font-weight: bold;
+    font-size: 10px;
+    border-radius: 1.5rem;
+    width: auto;
+    transition: all 0.25s ease-in-out;
+    pointer-events: all;
+    user-select: none;
+    text-align: center;
+    padding: 0.25rem;
+    display: inline-flex;
+    user-select: none;
+}
+
+.bs-n:hover {
+    color: white;
+    background: rgba(0,0,0,0.75);
+}
+
+.bs-n img {
+    width: 1.25rem; /* Adjust as needed */
+    height: 1.25rem; /* Adjust as needed */
+    display: block;
+}
+
+.bs-n img:hover {
+    filter: invert(1);
+}
+
+
+.bs-n .icon-label {
+    position: relative;
+    bottom: 0;
+    right: 0;
+    font-size: 0.6rem; /* Adjust size */
+    font-weight: bold;
+    color: white;
+    padding: 0.1rem 0.2rem;
+    border-radius: 0.2rem;
+    line-height: 1;
+    text-shadow: 
+        -1px -1px 1px black,  
+         1px -1px 1px black,
+        -1px  1px 1px black,
+         1px  1px 3px black;    
+}
+
+
+
+
 #redoUndoButtons {
     position: absolute;
     bottom: 0;
@@ -425,7 +495,11 @@ input[type="color" i]:hover {
     flex-direction: row-reverse;
     justify-content: flex-start;
     z-index: 10;
+    user-select: none;
+    pointer-events: none;
 }
+
+
 
 #saveButton {
 }
@@ -554,6 +628,8 @@ input[type="color" i]:hover {
 
 .status-message {
   position: fixed;
+  pointer-events: none;
+  user-select: none;
   bottom: 50%;
   left: 50%;
   transform: translate(-50%, 50%);
@@ -707,6 +783,7 @@ input[type="color" i]:hover {
     opacity: 0.8;
     z-index: 100;
     pointer-events: none;
+    display: none;
 }
 
 
@@ -733,7 +810,8 @@ input[type="color" i]:hover {
 }*/
 
 .slider-group {
-  margin-bottom: -0.15rem;
+  margin-bottom: -0.5rem;
+  margin-top: -0.25rem;
 }
 
 .slider-group label {
@@ -770,6 +848,16 @@ input[type="color" i]:hover {
 .show-icon {
     width: 22px;
     height: auto;
+}
+
+.show-icon-invert {
+    width: 22px;
+    height: auto;    
+    filter: invert(1);
+}
+
+.show-icon-invert:hover {
+    filter: invert(1);    
 }
 
 
@@ -831,9 +919,15 @@ input[type="color" i]:hover {
 }
 
 
+#profileIconButton {
+    width: 2.2rem;
+    height: 2.2rem;
+}
+
+
 #profileIconButton img {
-    width: 3.25rem;
-    height: 3.25rem;
+    width: 2.1rem;
+    height: 2.1rem;
     border-radius: 50%;
     object-fit: cover;
     background-color: rgba(255,255,255,0.8);
@@ -946,10 +1040,10 @@ input[type="color" i]:hover {
 #chatToggleBtn {
     position: absolute;
     top: 0.15rem;
-    right: 108px;
+    right: 86px;
     border: 3px solid;
-    width: 3.3rem;
-    height: 3.3rem;
+    width: 2.2rem;
+    height: 2.2rem;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -960,8 +1054,8 @@ input[type="color" i]:hover {
 }
 
 #chatToggleBtn img {
-    width: 1.6rem;
-    height: 1.6rem;
+    width: 1.25rem;
+    height: 1.25rem;
 }
 
 
@@ -1149,8 +1243,8 @@ input[type="color" i]:hover {
 
 .chat-toggle-btn {
     position: relative;
-    width: 3rem;
-    height: 3rem;
+    width: 2.5rem;
+    height: 2.5rem;
     border: 3px solid red; /* default disconnected */
     border-radius: 50%;
     display: flex;
@@ -1169,11 +1263,11 @@ input[type="color" i]:hover {
 
 .chat-user-badge {
     position: absolute;
-    top: 36px;
-    right: 36px;
+    top: 19px;
+    right: 26px;
     background: red;
     color: white;
-    font-size: 12px;
+    font-size: 10px;
     font-weight: bold;
     border-radius: 50%;
     width: 20px;
@@ -1366,9 +1460,481 @@ input[type="color" i]:hover {
 
 .save-buttons {
   display: flex;
-  gap: 1rem;
+  gap: 0.75rem;
   justify-content: center;
   flex-wrap: wrap;
 }
 
+
+
+/* ——— Panels ——— */
+
+.layers-panel {
+  position: fixed;
+  right: 49px;
+  top: 72px;
+  width: 166px;
+  max-height: 85vh;
+  overflow: auto;
+  background: rgba(30,30,30,.9);
+  color: #fff;
+  border-radius: 5px;
+  padding: 7px;
+  box-shadow: 0 0 9px rgba(0, 0, 0, 0.4);
+  z-index: 1000;
+}
+
+/* keep everything else in your CSS as-is */
+.layers-header {
+  background: #333333;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 700;
+
+  /* minimal fix */
+  position: sticky;   /* was: absolute */
+  top: 0;
+  z-index: 1;
+
+  /* keep your spacing, or tweak if you like */
+  pointer-events: all;
+    margin: 0.5rem;
+}
+
+
+.layers-actions {
+    color: white;
+}
+
+.layers-actions button { 
+    padding: 0.2rem;
+    background: none;
+    border: none;
+    color: white;
+
+}
+.layers-list { display: flex; flex-direction: column; gap: 0px; }
+
+/* ——— Draggable wrapper variant ——— */
+#layersPanelWrapper {
+  position: fixed;
+  left: 24px;
+  top: 120px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  max-width: 340px;
+  background: rgba(30, 30, 30, 0.9);
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
+  overflow: hidden;
+}
+#layersPanelDragBar {
+  display: flex; align-items: center; justify-content: space-between; gap: 8px;
+  padding: 8px 10px; cursor: grab; user-select: none;
+  background: rgba(255,255,255,0.06); backdrop-filter: blur(6px);
+}
+#layersPanelDragBar:active { cursor: grabbing; }
+#layersPanelBody { max-height: 60vh; overflow: auto; padding: 8px; }
+#layersPanelWrapper[data-minimized="true"] #layersPanelBody { display: none; }
+#layersPanelWrapper .panel-toggle { background: transparent; border: 0; padding: 4px; cursor: pointer; }
+#layersPanelWrapper .panel-toggle .show-icon { width: 18px; height: 18px; }
+
+/* ——— Layer row layout (prevents name/ops collision and pulls name closer to opacity) ——— */
+.layer-item {
+  display: grid;
+  grid-template-columns: auto 1fr auto;           /* vis | content | ops */
+  grid-template-rows: auto auto auto;             /* ops, name, opacity */
+  grid-template-areas:
+    "vis ops ops"
+    "vis name name"
+    "vis opacity opacity";
+  column-gap: 8px;
+  row-gap: 0px;                                   /* small gap keeps name close to opacity */
+  align-items: center;
+  padding: 3px 3px;
+  box-sizing: border-box;
+
+  border: 1px solid #6aa7ff00;
+  border-radius: 6px;  
+}
+
+.layer-item.active { 
+    border: 1px solid #6aa7ff;
+    border-radius: 6px;
+}
+
+/* ——— Left column: eye + transform stacked (transform below eye) ——— */
+.layer-vis {
+  grid-area: vis;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+/* ——— Top-right: Up/Down (no extra bottom margin so it won't push the name) ——— */
+.layer-ops {
+  grid-area: ops;
+  display: flex;
+  gap: 6px;
+  justify-content: flex-end;
+  margin: 0;
+}
+.layer-ops .bs { padding: 2px 6px; font-size: 11px; }
+
+/* ——— Name row (fills available width; won’t collide) ——— */
+
+
+.layer-name {
+  grid-area: name;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+}
+
+/* editable layer name input */
+.layer-name input {
+  width: 96%;
+  min-width: 0;                                  /* critical for shrinking inside grid */
+  box-sizing: border-box;
+  background: transparent;
+  color: #fff;
+  border: none;
+  border-bottom: 1px dashed rgba(255,255,255,.25);
+  outline: none;
+  font-size: 12px;
+  padding: 2px 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  caret-color: #000;
+  transition: background-color .12s ease, color .12s ease, border-color .12s ease;
+}
+
+/* hover: slightly clearer underline */
+.layer-name input:hover {
+  border-bottom-color: rgba(255,255,255,.4);
+}
+
+/* FOCUS (editing): yellow background, black text. No rounding. */
+.layer-name input:focus,
+.layer-name:focus-within input {
+  background-color: #ffe555;  /* flat yellow */
+  color: #000;
+  border-bottom: 1px solid #000;
+  border-radius: 0.2rem;
+  padding: 0.1rem;
+}
+
+/* keyboard focus extra clarity (still no rounding) */
+.layer-name input:focus-visible {
+  background-color: #ffe03b;
+  color: #000;
+  border-bottom: 1px solid #000;
+}
+
+/* placeholder dim */
+.layer-name input::placeholder {
+  color: rgba(255,255,255,.35);
+}
+
+/* disabled / readonly */
+.layer-name input:disabled,
+.layer-name input[readonly] {
+  background: transparent;
+  color: rgba(255,255,255,.7);
+  border-bottom: 1px dashed rgba(255,255,255,.2);
+}
+
+
+
+
+/* ——— Opacity row sits right under the name ——— */
+.layer-opacity {
+  grid-area: opacity;                             /* replaces previous grid-column rule */
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 9px;
+  margin-top: 0.5rem;
+}
+.layer-opacity input[type="range"] { width: 100%; }
+
+/* — Button sizing, speed, and states — */
+.icon-btn {
+  border-radius: 12px;
+  padding: 0.06rem;
+
+  /* keep your current bg; just add snappy transitions */
+  transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.icon-btn img {
+  display: block;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+/* Hover/focus: darken button and invert icon to white */
+.icon-btn:hover,
+.icon-btn:focus-visible {
+  /* don’t force a bg color if you already have one;
+     but if you want the darker hover explicitly, uncomment: */
+  /* background: #111; */
+}
+.icon-btn:hover img,
+.icon-btn:focus-visible img {
+  filter: invert(1) brightness(1.1); /* makes black SVGs appear white on dark */
+}
+
+/* Press feedback (optional, tiny nudge) */
+.icon-btn:active { transform: translateY(1px); }
+
+/* Selected/active state: yellow bg + black icon */
+.icon-btn.is-active {
+  background: #ffd400 !important;    /* yellow */
+  box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset;
+}
+.icon-btn.is-active img {
+  filter: none;                      /* keep original (black) SVG */
+  opacity: 1;
+}
+
+/* — Button sizing, speed, and states — */
+.icon-btn-2 {
+  border-radius: 12px;
+  padding: 0.06rem;
+
+  /* keep your current bg; just add snappy transitions */
+  transition: background-color 120ms ease, box-shadow 120ms ease, transform 120ms ease;
+}
+.icon-btn-2 img {
+  display: block;
+  transition: filter 120ms ease, opacity 120ms ease;
+}
+
+/* Hover/focus: darken button and invert icon to white */
+.icon-btn-2:hover,
+.icon-btn-2:focus-visible {
+  /* don’t force a bg color if you already have one;
+     but if you want the darker hover explicitly, uncomment: */
+  /* background: #111; */
+}
+.icon-btn-2:hover img,
+.icon-btn-2:focus-visible img {
+  filter: invert(1) brightness(1.1); /* makes black SVGs appear white on dark */
+}
+
+/* Press feedback (optional, tiny nudge) */
+.icon-btn-2:active { transform: translateY(1px); }
+
+/* Selected/active state: yellow bg + black icon */
+.icon-btn-2.is-active {
+  background: #ffd400 !important;    /* yellow */
+  box-shadow: 0 0 0 1px rgba(0,0,0,.15) inset;
+}
+.icon-btn-2.is-active img {
+  filter: none;                      /* keep original (black) SVG */
+  opacity: 1;
+}
+
+
+
+
+/* Keep the layer-ops compact with the smaller buttons */
+.layer-ops .bs { padding: 2px 6px; font-size: 11px; }
+
+/* (From earlier) hidden scrollbars stays as you set */
+
+
+
+/* Prevent iOS focus-zoom on editable controls */
+
+#layersList {
+
+}
+
+#layersList input,
+#layersList textarea,
+#layersList select {
+
+}
+
+
+#layersPanel { user-select: none; }
+#layersPanel input,
+#layersPanel textarea { user-select: text; }
+
+
+#layersPanelToggle { 
+    color: #fff;
+    position: absolute;
+    right: 0rem;
+    top: 0rem;
+    z-index: 10;
+    background: none;
+    border: none;
+    padding: 0.1rem;
+    margin: 0.4rem;
+}        
+
+#layersPanelToggle.disabled { color:#999 } 
+
+
+/* Hide native scrollbars but keep scrolling */
+.layers-panel,
+#layersPanelBody {
+  scrollbar-width: none;     /* Firefox */
+  -ms-overflow-style: none;  /* IE/old Edge */
+}
+.layers-panel::-webkit-scrollbar,
+#layersPanelBody::-webkit-scrollbar {
+  width: 0;
+  height: 0;                 /* Chrome/Safari/Edge (Blink/WebKit) */
+}
+
+/* Optional: a little breathing room since there's no gutter */
+#layersPanelBody { padding-right: 6px; }
+
+/* ——— Tighten spacing a bit on small screens ——— */
+@media (max-width: 480px) {
+  .layer-item { column-gap: 6px; row-gap: 2px; }
+}
+
+
+
+/* ===== Layers panel: make list scroll, keep drag bar sticky, hide scrollbar ===== */
+
+/* 1) Panel itself doesn't scroll; inner list will */
+#layersPanel,
+.layers-panel {
+  overflow: hidden;
+}
+
+/* 2) Drag bar sticks to the top of the panel during list scroll */
+#layersPanelDragBar {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  width: 70%;                 
+}
+
+/* 3) The list becomes the scroll container */
+#layersList,
+.layers-list {
+  overflow: auto;
+  max-height: calc(65vh - 34px);  /* 50vh (panel) minus ~dragbar height; tweak if needed */
+}
+
+/* 4) Hide the scrollbar only for the list (keeps your global buttons/styles intact) */
+#layersPanel .layers-list,
+#layersList {
+  scrollbar-width: none;        /* Firefox */
+  -ms-overflow-style: none;     /* IE/old Edge */
+}
+#layersPanel .layers-list::-webkit-scrollbar,
+#layersList::-webkit-scrollbar {
+  width: 0;
+  height: 0;                    /* Chrome/Safari/Edge */
+}
+
+
+/* Gentle, semi-transparent horizontal lines drag bar (ID selector) */
+#layersPanelDragBar{
+  --line-alpha: 1;
+  --hover-alpha: .5;
+  --active-alpha: .75;
+
+  position: relative;
+  border-radius: 3px;
+  cursor: ns-resize;
+  user-select: none;
+
+  height: 8px;
+
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, var(--line-alpha)) 0,
+      rgba(0, 0, 0, var(--line-alpha)) 1px,
+      rgba(0, 0, 0, 0) 4px
+    );
+  background-clip: padding-box;
+}
+
+#layersPanelDragBar::before{
+  content: "";
+  position: absolute;
+  left: -8px; right: -8px;
+  top: -6px; bottom: -6px;
+}
+
+#layersPanelDragBar:hover{
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, var(--hover-alpha)) 0,
+      rgba(0, 0, 0, var(--hover-alpha)) 1px,
+      rgba(0, 0, 0, 0) 4px
+    );
+}
+#layersPanelDragBar:active,
+#layersPanelDragBar.isDragging{
+  background-image:
+    repeating-linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, var(--active-alpha)) 0,
+      rgba(0, 0, 0, var(--active-alpha)) 1px,
+      rgba(0, 0, 0, 0) 4px
+    );
+}
+
+@media (prefers-color-scheme: dark){
+  #layersPanelDragBar{
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, var(--line-alpha)) 0,
+        rgba(255, 255, 255, var(--line-alpha)) 1px,
+        rgba(255, 255, 255, 0) 4px
+      );
+  }
+  #layersPanelDragBar:hover{
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, var(--hover-alpha)) 0,
+        rgba(255, 255, 255, var(--hover-alpha)) 1px,
+        rgba(255, 255, 255, 0) 4px
+      );
+  }
+  #layersPanelDragBar:active,
+  #layersPanelDragBar.isDragging{
+    background-image:
+      repeating-linear-gradient(
+        to bottom,
+        rgba(255, 255, 255, var(--active-alpha)) 0,
+        rgba(255, 255, 255, var(--active-alpha)) 1px,
+        rgba(255, 255, 255, 0) 4px
+      );
+  }
+}
+
+#layersActions {
+    justify-content: space-evenly;
+    margin-top: 1rem;
+}
+
+
+#hideAllButton {
+    position: absolute;
+    left: 4px;
+    top: 4px;
+    pointer-events: all;
+    z-index: 1000;
+    user-select: none;
+}
 
