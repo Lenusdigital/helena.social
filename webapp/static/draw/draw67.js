@@ -10973,6 +10973,19 @@ function toggleUIVisibilityMode() {
 
 // wire the top-left eye button to the toggle
 document.getElementById("hideAllButton")?.addEventListener("click", toggleUIVisibilityMode);
+// ESC: if UI is hidden, show it back (does not hide when visible)
+document.addEventListener("keydown", (e) => {
+  // ignore if a modifier is held to avoid clashing with system shortcuts
+  if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+
+  const isEsc = (e.key === "Escape" || e.key === "Esc" || e.keyCode === 27);
+  if (!isEsc) return;
+
+  if (document.body.classList.contains("__ui_off")) {
+    e.preventDefault();
+    toggleUIVisibilityMode();
+  }
+}, { capture: true });
 
 
 
