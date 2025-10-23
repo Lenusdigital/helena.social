@@ -1,4 +1,4 @@
-# WORKWORK.FUN LTD - UK COmpany - Proprietary License (All Rights Reserved)
+# WORKWORK.FUN LTD - UK Company - Proprietary License (All Rights Reserved)
 
 **SPDX-License-Identifier:** LicenseRef-WORKWORKFUN-Proprietary
 **Copyright © 2025 WORKWORK.FUN LTD.**
@@ -53,7 +53,7 @@ This License is governed by and construed in accordance with the laws of England
 
 ## 10. Contact
 
-For permissions or commercial licensing, contact: **[legal@workwork.fun](mailto:legal@workwork.fun)**
+For permissions or commercial licensing, contact: **[legal@workwork.fun](mailto:sylwester@workwork.fun)**
 
 ---
 
